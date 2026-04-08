@@ -110,19 +110,19 @@ RequestsInstrumentor().instrument()  # Spans exported to Promptic
 
 ## API Client
 
-Both sync (`PromenticClient`) and async (`AsyncPromenticClient`) clients with identical method signatures.
+Both sync (`PrompticClient`) and async (`AsyncPrompticClient`) clients with identical method signatures.
 
 ```python
-from promptic_sdk import PromenticClient
+from promptic_sdk import PrompticClient
 
-with PromenticClient() as client:
+with PrompticClient() as client:
     traces = client.list_traces(limit=10)
 ```
 
 ```python
-from promptic_sdk import AsyncPromenticClient
+from promptic_sdk import AsyncPrompticClient
 
-async with AsyncPromenticClient() as client:
+async with AsyncPrompticClient() as client:
     traces = await client.list_traces(limit=10)
 ```
 
@@ -138,7 +138,7 @@ Evaluate agent performance using datasets, runs, and evaluations:
 
 ```python
 import promptic_sdk
-from promptic_sdk import PromenticClient
+from promptic_sdk import PrompticClient
 
 promptic_sdk.init()
 
@@ -148,7 +148,7 @@ with promptic_sdk.ai_component("my-agent", dataset="eval-set", run="v2-improved"
         agent.run(query)
 
 # 2. Trigger evaluation via API
-with PromenticClient() as client:
+with PrompticClient() as client:
     components = client.list_components()
     comp_id = components["data"][0]["id"]
 
@@ -167,9 +167,9 @@ with PromenticClient() as client:
 Optimize prompts via experiments:
 
 ```python
-from promptic_sdk import PromenticClient
+from promptic_sdk import PrompticClient
 
-with PromenticClient() as client:
+with PrompticClient() as client:
     # Create experiment
     exp = client.create_experiment(
         ai_component_id="comp_...",
@@ -277,7 +277,7 @@ promptic annotations list --component <id> --dataset <d>  # List by dataset
 promptic annotations delete <ann-id> --component <id> --run <r>  # Delete
 
 # Evaluations
-promptic evaluations run <comp-id> --dataset <ds-id>    # Run evaluation
+promptic evaluations run <comp-id> --dataset <ds-id> --run <run-id>  # Run evaluation (--run required)
 promptic evaluations list --component <id>       # List evaluations
 promptic evaluations get <eval-id> --component <id>     # Get results
 ```

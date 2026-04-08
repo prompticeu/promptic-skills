@@ -1,6 +1,6 @@
 # API Reference
 
-Complete method signatures for `PromenticClient` and `AsyncPromenticClient`. Both clients share identical signatures — async methods are prefixed with `await`.
+Complete method signatures for `PrompticClient` and `AsyncPrompticClient`. Both clients share identical signatures — async methods are prefixed with `await`.
 
 ## Traces
 
