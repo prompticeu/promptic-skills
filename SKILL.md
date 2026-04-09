@@ -134,20 +134,45 @@ For detailed method signatures and parameters, see [references/api.md](reference
 
 ## Agent Evaluation Workflow
 
-Evaluate agent performance using datasets, runs, and evaluations:
+Evaluate agent performance using datasets, runs, and evaluations.
+
+### Step 1: Run agent with tracing
+
+Instrument the agent with dataset and run tagging — traces are auto-collected:
 
 ```python
 import promptic_sdk
-from promptic_sdk import PrompticClient
 
 promptic_sdk.init()
 
-# 1. Run agent with dataset tagging — traces are auto-collected
 with promptic_sdk.ai_component("my-agent", dataset="eval-set", run="v2-improved"):
     for query in test_queries:
         agent.run(query)
+```
 
-# 2. Trigger evaluation via API
+### Step 2: Trigger evaluation
+
+**Option A — CLI (recommended for agentic workflows):**
+
+```bash
+# Find the component and dataset IDs
+promptic components list --json
+promptic datasets list --component <comp-id> --json
+promptic runs list --component <comp-id> --json
+
+# Run evaluation (waits for completion by default)
+promptic evaluations run <comp-id> --dataset <ds-id> --run <run-id> --name "v2-eval"
+
+# Or don't wait and check later
+promptic evaluations run <comp-id> --dataset <ds-id> --run <run-id> --no-wait
+promptic evaluations get <eval-id> --component <comp-id>
+```
+
+**Option B — Python API:**
+
+```python
+from promptic_sdk import PrompticClient
+
 with PrompticClient() as client:
     components = client.list_components()
     comp_id = components["data"][0]["id"]
