@@ -60,7 +60,7 @@ client.update_observation(experiment_id: str, observation_id: int, **data) -> Ob
 client.delete_observation(experiment_id: str, observation_id: int) -> None
 ```
 
-Observation dict format: `{"input": str, "expected": str, "variables": Any (optional)}`.
+Observation dict format: `{"variables": dict[str, Any], "expected": str, "split": str (optional, default "eval")}`.
 
 ## Evaluators
 
