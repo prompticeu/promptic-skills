@@ -206,8 +206,8 @@ with PrompticClient() as client:
 
     # Add training observations
     client.create_observations(exp["id"], [
-        {"input": "Great product!", "expected": "positive"},
-        {"input": "Terrible service", "expected": "negative"},
+        {"variables": {"message": "Great product!"}, "expected": "positive"},
+        {"variables": {"message": "Terrible service"}, "expected": "negative"},
     ])
 
     # Add evaluators
