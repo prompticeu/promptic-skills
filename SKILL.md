@@ -16,11 +16,23 @@ pip install promptic-sdk
 Install extras for auto-instrumentation:
 
 ```bash
-pip install promptic-sdk[openai]       # OpenAI
-pip install promptic-sdk[anthropic]    # Anthropic
-pip install promptic-sdk[langchain]    # LangChain
-pip install promptic-sdk[all]          # All providers
+# LLM providers
+pip install promptic-sdk[openai]         # OpenAI
+pip install promptic-sdk[anthropic]      # Anthropic
+pip install promptic-sdk[bedrock]        # AWS Bedrock
+pip install promptic-sdk[vertexai]       # Google Vertex AI
+pip install promptic-sdk[mistralai]      # Mistral
+
+# Agent frameworks
+pip install promptic-sdk[langchain]      # LangChain / LangGraph / create_agent / deepagents
+pip install promptic-sdk[openai-agents]  # OpenAI Agents SDK
+pip install promptic-sdk[claude-agent]   # Claude Agent SDK
+
+pip install promptic-sdk[all]            # Everything above
 ```
+
+Pydantic AI ships its own OpenTelemetry emitter — enable with
+`Agent(..., instrument=True)`, no extras needed.
 
 ## Authentication
 
@@ -61,7 +73,10 @@ with promptic_sdk.ai_component("my-agent"):
 | `auto_instrument`  | Auto-detect and instrument LLM client libraries     | `True`                   |
 | `service_name`     | OpenTelemetry `service.name` resource attribute      | —                        |
 
-Auto-detected instrumentors: OpenAI, Anthropic, Google Generative AI, LangChain, Cohere.
+Auto-detected instrumentors: OpenAI, Anthropic, Google Generative AI, Vertex AI,
+Bedrock, Mistral, Cohere, LangChain (with LangGraph / `create_agent` / deepagents),
+OpenAI Agents SDK, Claude Agent SDK. All emit the official OpenTelemetry GenAI
+semantic conventions (`gen_ai.*`).
 
 ### ai_component context manager
 
@@ -104,9 +119,21 @@ promptic_sdk.init()
 RequestsInstrumentor().instrument()  # Spans exported to Promptic
 ```
 
-### LangGraph / LangSmith integration
+### LangGraph / deepagents integration
 
-`init()` automatically configures the LangSmith OTel bridge so LangGraph spans (including nested graphs) are exported to Promptic. No extra config needed. Respects `LANGSMITH_TRACING` and `LANGSMITH_OTEL_ENABLED` if already set.
+`pip install promptic-sdk[langchain]` installs OpenLLMetry's
+`opentelemetry-instrumentation-langchain` (≥0.60), which covers LangChain
+chains, LangGraph (`create_agent`), and deepagents with subagents. Emits the
+official OpenTelemetry GenAI semantic conventions (`gen_ai.tool.definitions`,
+`gen_ai.operation.name`, `gen_ai.usage.*`), so agent-evaluation insights
+(loops, tool errors, unused tools) work for flat agents and multi-agent
+graphs uniformly.
+
+Users who prefer the LangSmith OTel bridge (e.g. for hybrid dual-export to
+LangSmith) can opt in by setting `LANGSMITH_TRACING=true` and
+`LANGSMITH_OTEL_ENABLED=true` before calling `init()`. Note: the LangSmith
+bridge does not emit tool definitions, so the "unused tools" insight will
+not fire on LangSmith-bridged traces.
 
 ## API Client
 
