@@ -81,6 +81,8 @@ client.get_iteration(experiment_id: str, iteration_id: int) -> IterationWithScor
 client.get_best_iteration(experiment_id: str) -> IterationWithScores
 ```
 
+Iterations report two scores: `overallNormalizedScore` (train split, used to guide the search) and `evalNormalizedScore` (held-out eval split, `None` when `trainSplitRatio` is not configured on the experiment). `get_best_iteration` ranks by `evalNormalizedScore` when available, otherwise by `overallNormalizedScore`.
+
 ## Deployments
 
 ```python
