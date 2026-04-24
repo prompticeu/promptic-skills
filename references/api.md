@@ -73,6 +73,11 @@ client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 
 Evaluator dict format: `{"name": str, "type": "f1"|"judge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional)}`.
 
+`structuredOutput` evaluator config keys:
+
+- `schema_definition` (dict, optional): JSON schema used to drive per-field scoring (strings → embedding similarity, numeric/boolean/integer primitives → exact equality, nested objects → recursive compare, arrays → content-aligned with soft F1).
+- `array_strategies` (dict[str, "exact"|"similarity"], optional): per-array-field override keyed by dotted path (e.g. `"tags"`, `"user.skills"`, `"people[].skills"`). Defaults: `exact` for arrays of enums/booleans/integers, `similarity` (greedy alignment + soft F1) for arrays of strings/numbers/objects. Array scoring is content-based, not positional.
+
 ## Iterations
 
 ```python
