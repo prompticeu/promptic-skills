@@ -49,6 +49,12 @@ client.get_experiment(experiment_id: str) -> Experiment
 client.update_experiment(experiment_id: str, **updates) -> Experiment
 client.delete_experiment(experiment_id: str) -> None
 client.start_experiment(experiment_id: str) -> ExperimentStarted
+client.duplicate_experiment(
+    experiment_id: str,
+    *,
+    continue_from_optimized=False,   # True = seed new experiment from source's best optimized prompt
+    initial_prompt_override=None,    # Or override the initial prompt with custom text
+) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
 
 ## Observations

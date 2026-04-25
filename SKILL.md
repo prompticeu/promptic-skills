@@ -287,6 +287,8 @@ promptic experiments get <id>       # Get experiment details
 promptic experiments update <id>    # Update a pending experiment
 promptic experiments delete <id>    # Delete an experiment
 promptic experiments start <id>     # Start optimization
+promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (observations + evaluators)
+promptic experiments continue <id> [--start]                 # Clone, seed initial prompt from source's best iteration
 
 # Observations (training data)
 promptic observations list <exp-id>              # List observations
