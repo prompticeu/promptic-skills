@@ -77,7 +77,13 @@ client.update_evaluator(experiment_id: str, evaluator_id: str, **data) -> Evalua
 client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
-Evaluator dict format: `{"name": str, "type": "f1"|"judge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional)}`.
+Evaluator dict format: `{"name": str, "type": "f1"|"similarity"|"structuredOutput"|"comparisonJudge"|"referenceJudge"|"generalJudge", "weight": float, "scaleMin": float (default 0), "scaleMax": float (default 1), "description": str (optional), "config": dict (optional)}`.
+
+Judge evaluator config payloads:
+- `comparisonJudge` / `referenceJudge`: `config = {"instructions": "<judge prompt that scores prediction vs expected>"}`.
+- `generalJudge`: `config = {"messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "<findings>{predicted}</findings>"}]}`.
+
+CLI shortcuts: `promptic evaluators add <exp> -n <name> -t comparisonJudge -i "<instructions>"` (or `-c config.json` for the messages shape). `promptic evaluators update <exp> <eval> -i "<new instructions>"` swaps a judge prompt in place.
 
 ## Iterations
 

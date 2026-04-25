@@ -298,7 +298,8 @@ promptic observations delete <exp-id> <obs-id>   # Delete an observation
 
 # Evaluators
 promptic evaluators list <exp-id>                # List evaluators
-promptic evaluators add <exp-id> -n <name> -t <type>  # Add evaluator
+promptic evaluators add <exp-id> -n <name> -t <type> [-i INSTRUCTIONS | -c config.json]   # Add evaluator (judge config supported)
+promptic evaluators update <exp-id> <eval-id> [-i INSTRUCTIONS | --scale-max N | -w W]    # Edit evaluator in place
 promptic evaluators delete <exp-id> <eval-id>    # Delete an evaluator
 
 # Iterations
