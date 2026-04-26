@@ -62,9 +62,9 @@ The body uses a `runtime` discriminator:
 
 | Status | Body                                                       | Cause                                                          |
 |--------|------------------------------------------------------------|----------------------------------------------------------------|
-| 401    | `{"error": "Invalid or missing API key"}`                  | No / invalid `Authorization: Bearer …` header                  |
-| 403    | `{"error": "Forbidden"}`                                   | API-key user is not a workspace admin (alpha gate)             |
-| 403    | `{"error": "<resource> belongs to a different workspace"}` | Resource lives in a workspace your API key isn't tied to       |
+| 401    | `{"error": "Unauthorized"}`                                | No valid auth (neither `Authorization: Bearer …` nor a logged-in dashboard session) |
+| 403    | `{"error": "Forbidden"}`                                   | Authenticated user is not a workspace admin (alpha gate)       |
+| 404    | `{"error": "<resource> not found"}`                        | Resource doesn't exist or caller's workspace can't see it (RLS) |
 
 ## Push-time validation errors (`POST /runs` external mode)
 

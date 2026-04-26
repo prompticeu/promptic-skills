@@ -55,21 +55,28 @@ you → Promptic:    predictions[]  ({observation_id, value})
 
 ## Auth
 
-Use the standard Promptic API key (same as every other `promptic-*` skill).
-Mint one in the dashboard under **Settings → API Keys**, expose it as
-`PROMPTIC_API_KEY`, and send it as a bearer token:
+Two valid sources, picked automatically by the route handler:
 
-```python
-import httpx, os
-http = httpx.AsyncClient(
-    headers={"Authorization": f"Bearer {os.environ['PROMPTIC_API_KEY']}"}
-)
-```
+1. **API key (recommended for scripts / agents)** — mint one in the
+   dashboard under **Settings → API Keys**, expose it as
+   `PROMPTIC_API_KEY`, and send it as a bearer token:
+
+   ```python
+   import httpx, os
+   http = httpx.AsyncClient(
+       headers={"Authorization": f"Bearer {os.environ['PROMPTIC_API_KEY']}"}
+   )
+   ```
+
+2. **Dashboard session cookie** — used by the in-browser benchmark forms
+   (create dataset, upload observation, trigger run). No script-side
+   action needed; it Just Works for fetches issued from the dashboard.
 
 **Alpha gating.** Benchmark Studio is currently restricted to workspace
-admins. If you mint an API key as a non-admin user the routes return 403
-`Forbidden`. Ask the workspace owner to grant admin access (or to mint the
-key under their own account) until the feature opens up.
+admins. Either auth source must resolve to a user with `is_admin=true` or
+the routes return 403 `Forbidden`. Ask the workspace owner to grant admin
+access (or to mint the API key under their own account) until the feature
+opens up.
 
 ## Push body shape
 
@@ -117,9 +124,9 @@ Auth / access errors (apply to every endpoint):
 
 | Status | Body                                          | Cause                                                          |
 |--------|-----------------------------------------------|----------------------------------------------------------------|
-| 401    | `{"error": "Invalid or missing API key"}`     | No / invalid `Authorization: Bearer …` header                  |
-| 403    | `{"error": "Forbidden"}`                      | API-key user is not a workspace admin (alpha gate)             |
-| 403    | `{"error": "<resource> belongs to a different workspace"}` | Resource lives in a workspace your API key isn't tied to       |
+| 401    | `{"error": "Unauthorized"}`                   | No valid auth (neither `Authorization: Bearer …` nor a logged-in dashboard session) |
+| 403    | `{"error": "Forbidden"}`                      | Authenticated user is not a workspace admin (alpha gate)       |
+| 404    | `{"error": "<resource> not found"}`           | Resource doesn't exist *or* the caller's workspace can't see it (RLS-gated) |
 
 Push-time validation errors (`POST /runs` external mode):
 
