@@ -89,7 +89,9 @@ Supported `config` keys for the `structuredOutput` type:
   - `weight` (float, default `1.0`)
   - `strategy` (string): scalar comparison — `"exact" | "embedding" | "contains" | "judge"`. The `judge` value enables LLM-as-judge per-pair scoring on string fields and surfaces reasoning in the observation-details sheet.
   - `array_strategy` (string): array aggregation — `"exact" | "similarity" | "judge"`. The `judge` value runs a single whole-array LLM call returning F1-compatible counts; arrays exceeding 50 items per side fall back to `similarity` with a warning marker.
-  - `required` (bool): defaults from the schema's `required` arrays.
+
+  Whether a field counts as required is read from the JSON schema's `required` array, not from this dict — `FieldConfig` rejects unknown keys.
+
 - `judge_instructions` (string, optional): domain-specific guidance shared by every field configured with `strategy=judge` or `array_strategy=judge`. Appended to the built-in *"do these convey the same essential information?"* rubric — leave unset to use the rubric on its own.
 
 The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0` instead of ~`0.55`. Re-running older experiments may show lower scores on string-heavy schemas with unrelated content.
