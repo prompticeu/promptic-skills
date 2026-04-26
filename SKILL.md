@@ -1,6 +1,6 @@
 ---
 name: promptic
-description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, and agent evaluation. Use when code imports `promptic_sdk`, user asks to add Promptic tracing, optimize prompts, evaluate agents, deploy prompts, or integrate with the Promptic platform. Also use when setting up OpenTelemetry-based LLM tracing, creating evaluation datasets, or managing AI components programmatically.
+description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, and agent evaluation. Use when code imports `promptic_sdk`, user asks to add Promptic tracing, optimize prompts, evaluate agents, deploy prompts, or integrate with the Promptic platform. Also use when setting up OpenTelemetry-based LLM tracing, architecture tracing, workflow tracing, semantic parent/child spans, evaluation datasets, or managing AI components programmatically.
 ---
 
 # Promptic Python SDK
@@ -106,6 +106,68 @@ with promptic_sdk.ai_component("my-agent"):
     with promptic_sdk.dataset("eval-round-1"):
         agent.run(test_input)
 ```
+
+### Tracing workflows with custom spans
+
+Auto-instrumentation captures individual LLM and tool calls, but not the surrounding workflow logic (pre-processing, retrieval, post-processing, control flow). To get an end-to-end view of how an input becomes an output, wrap your workflow stages in custom OpenTelemetry spans. Auto-instrumented provider spans automatically nest under whichever custom span is active.
+
+Recommended pattern:
+
+1. Wrap the whole run in one root workflow span inside `ai_component(...)`.
+2. Add a child task span for each meaningful stage of the pipeline.
+3. Record the stage's input and output as span attributes so the trace reads as a transformation, not just a list of LLM calls.
+
+```python
+import json
+import promptic_sdk
+from opentelemetry import trace
+
+promptic_sdk.init()
+tracer = trace.get_tracer(__name__)
+
+with promptic_sdk.ai_component("my-agent"):
+    with tracer.start_as_current_span("run_workflow") as root:
+        root.set_attribute("traceloop.span.kind", "workflow")
+        root.set_attribute("traceloop.entity.input", json.dumps(user_input))
+
+        with tracer.start_as_current_span("retrieve_context") as span:
+            span.set_attribute("traceloop.span.kind", "task")
+            span.set_attribute("traceloop.entity.input", json.dumps(query))
+            context = retrieve(query)
+            span.set_attribute("traceloop.entity.output", json.dumps(context))
+
+        with tracer.start_as_current_span("generate_answer") as span:
+            span.set_attribute("traceloop.span.kind", "task")
+            # Auto-instrumented LLM call nests under this task span
+            answer = llm_call(context)
+
+        root.set_attribute("traceloop.entity.output", json.dumps(answer))
+```
+
+Span attribute conventions:
+
+- `traceloop.span.kind="workflow"` — the top-level run
+- `traceloop.span.kind="task"` — an internal pipeline stage
+- `traceloop.entity.input` / `traceloop.entity.output` — JSON-serialized stage payloads
+- `gen_ai.*` — reserved for LLM/tool spans; auto-instrumentors emit these
+
+Tips:
+
+- Use semantic span names (`retrieve_context`, `rerank_results`) instead of generic function names when several calls would otherwise collide.
+- For large payloads, log a small preview plus a count rather than the full object — traces are not meant to store data:
+
+  ```python
+  span.set_attribute(
+      "traceloop.entity.output",
+      json.dumps({
+          "items": items[:5],
+          "item_count": len(items),
+          "additional_item_count": max(len(items) - 5, 0),
+      }),
+  )
+  ```
+
+Verify with `promptic traces get <trace-id> --json`: the root workflow span should carry structured input/output, task spans should appear as its children, and auto-instrumented LLM/tool spans should nest under the task that triggered them.
 
 ### Custom OpenTelemetry instrumentors
 
