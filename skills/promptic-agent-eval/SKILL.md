@@ -23,13 +23,22 @@ it first per the **`promptic-trace`** skill (`promptic_sdk.init()` +
 `ai_component(...)` context manager). Tracing is what produces the data
 this skill scores.
 
-## Installation
+## Setup
 
 ```bash
 pip install promptic-sdk
+
+# Local dev — browser auth
+promptic login
+
+# CI/CD — API key
+export PROMPTIC_API_KEY="pk_..."
 ```
 
-(See `promptic-trace` skill for provider/framework extras and auth.)
+Config resolution: explicit args > env vars (`PROMPTIC_API_KEY`,
+`PROMPTIC_ENDPOINT`) > `~/.promptic/config.toml`. For LLM provider /
+framework extras (`promptic-sdk[openai]`, `[langchain]`, …), see the
+`promptic-trace` skill.
 
 ## Workflow
 

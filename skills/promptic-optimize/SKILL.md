@@ -10,13 +10,22 @@ Tune prompts by running experiments: each experiment defines an initial
 prompt, training observations, and evaluators; the optimizer iterates until
 it converges; the best iteration can be deployed for runtime use.
 
-## Installation
+## Setup
 
 ```bash
 pip install promptic-sdk
+
+# Local dev — browser auth
+promptic login
+
+# CI/CD — API key
+export PROMPTIC_API_KEY="pk_..."
 ```
 
-(See `promptic-trace` skill for provider/framework extras and auth.)
+Config resolution: explicit args > env vars (`PROMPTIC_API_KEY`,
+`PROMPTIC_ENDPOINT`) > `~/.promptic/config.toml`. For LLM provider /
+framework extras (`promptic-sdk[openai]`, `[langchain]`, …), see the
+`promptic-trace` skill.
 
 ## End-to-end example
 
