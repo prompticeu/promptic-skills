@@ -109,7 +109,9 @@ with promptic_sdk.ai_component("my-agent"):
 
 ### Tracing workflows with custom spans
 
-Auto-instrumentation captures individual LLM and tool calls, but not the surrounding workflow logic (pre-processing, retrieval, post-processing, control flow). To get an end-to-end view of how an input becomes an output, wrap your workflow stages in custom OpenTelemetry spans. Auto-instrumented provider spans automatically nest under whichever custom span is active.
+Most users don't need this. With the right `[extras]` installed, auto-instrumentation already creates spans for every LLM and tool call. Reach for custom spans only when you have meaningful **non-LLM** workflow logic (retrieval, normalization, business rules, control flow) you want represented in the trace.
+
+When you do need it, wrap your workflow stages in custom OpenTelemetry spans. Auto-instrumented provider spans automatically nest under whichever custom span is active.
 
 Recommended pattern:
 
