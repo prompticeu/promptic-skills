@@ -406,5 +406,5 @@ Enums (Literal types):
 - `ExperimentStatus`: `"pending" | "scheduled" | "running" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput"`
-- `EvaluatorType`: `"f1" | "judge" | "similarity" | "structuredOutput"`
+- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput"`
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"`
