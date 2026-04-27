@@ -73,12 +73,10 @@ client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 
 Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional)}`.
 
-Judge evaluator configs (upstream [promptic#471](https://github.com/prompticeu/promptic/pull/471)):
+Judge evaluator configs:
 
 - `referenceJudge` / `comparisonJudge` — `config.instructions` (string): rubric text. Reference judge scores predicted and expected independently and rewards matching; comparison judge scores predicted vs expected in one prompt.
 - `generalJudge` — `config.messages` (list of `{"role": "system"|"user"|"assistant", "content": str}`): full user-defined judge prompt. Content may reference `{input}`, `{expected}`, `{predicted}`, or any dataset column name.
-
-Legacy `"judge"` rows created before #471 were migrated to `"referenceJudge"`, which preserves the original per-side scoring semantics. New evaluators must use one of the three explicit types.
 
 ## Iterations
 
