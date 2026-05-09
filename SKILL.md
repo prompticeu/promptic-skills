@@ -274,9 +274,24 @@ with PrompticClient() as client:
     evaluation = client.create_evaluation(comp_id, ds_id, name="v2-eval")
     result = client.wait_for_evaluation(comp_id, evaluation["id"])
 
+    # Heuristic insights (loop, tool_error, unused_tool, cost_hotspot, termination)
     for insight in result["results"]["insights"]:
         print(f"[{insight['severity']}] {insight['title']}: {insight['description']}")
+
+    # LLM-judge results (predefined trajectory critics + custom rubrics)
+    for summary in result["results"].get("judgeResults", []):
+        print(f"{summary['judgeName']}: "
+              f"{len(summary['failedRunIds'])}/{summary['totalRuns']} flagged")
+        for run in summary["results"]:
+            score = run.get("value")  # numeric for predefined judges, None for custom
+            print(f"  {run['runId']}: {run['status']} score={score}")
 ```
+
+The four predefined trajectory critics (`efficiency`, `tool_selection_accuracy`,
+`plan_adherence`, `reasoning_coherence`) flow through `judgeResults[]`, not
+`insights[]`. `efficiency` and `tool_selection_accuracy` are default-on
+(heuristic-cheap); `plan_adherence` and `reasoning_coherence` are opt-in and
+gated by `BENCHMARK_TRAJECTORY_CRITIC_LLM_ENABLED` server-side.
 
 ## Prompt Optimization Workflow
 
@@ -408,3 +423,5 @@ Enums (Literal types):
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput"`
 - `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput"`
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"`
+- `AgentEvaluatorType`: `"loop" | "tool_error" | "unused_tool" | "cost_hotspot" | "termination" | "efficiency" | "tool_selection_accuracy" | "plan_adherence" | "reasoning_coherence"` — surfaced in `Insight.type` (heuristic) or `LLMJudgeSummary.judgeName` (predefined judges)
+- `LLMJudgeRunStatus`: `"passed" | "issue" | "skipped" | "failed"`

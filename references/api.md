@@ -160,4 +160,13 @@ client.get_evaluation(component_id: str, evaluation_id: str) -> AgentEvaluation
 client.wait_for_evaluation(component_id: str, evaluation_id: str, *, max_wait=300, poll_interval=2) -> AgentEvaluation
 ```
 
-`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` list and `meta` object.
+`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with:
+
+- `insights: list[Insight]` — heuristic findings (loop, tool_error, unused_tool, cost_hotspot, termination) with `severity`, `title`, `description`, `frequency`, `affectedRunIds`, `details`, `suggestedFix`.
+- `meta` — aggregate stats (`totalRuns`, `totalTokens`, `totalCostUsd`, `averageDurationMs`, `errorRate`, `analyzedAt`).
+- `judgeResults: list[LLMJudgeSummary]` — per-judge aggregates for predefined trajectory critics (`efficiency`, `tool_selection_accuracy`, `plan_adherence`, `reasoning_coherence`) and any custom `llm_judge` rubrics. Each summary has `judgeName`, `frequency`, `totalRuns`, `passedRunIds`, `failedRunIds`, and `results: list[LLMJudgeRunResult]`.
+- `enabledTypes: list[AgentEvaluatorType]` — the effective evaluator set that ran for this evaluation (DB rows merged with the default-enablement contract).
+
+`LLMJudgeRunResult` carries per-run verdicts: `runId`, `traceId`, `status` (`"passed" | "issue" | "skipped" | "failed"`), `severity`, `rationale`, `suggestedFix`, `citedSpanIds`, `value` (numeric score in `[0, 1]` for predefined judges, `None` for verdict-only custom rubrics or skipped runs), and `metadata`.
+
+The two LLM-driven critics (`plan_adherence`, `reasoning_coherence`) are opt-in and short-circuit to `status="skipped"` unless the server has `BENCHMARK_TRAJECTORY_CRITIC_LLM_ENABLED=true` configured. `efficiency` and `tool_selection_accuracy` are default-on heuristics.
