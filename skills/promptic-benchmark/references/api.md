@@ -27,7 +27,9 @@ The body uses a `runtime` discriminator:
   "bundle_identity": {
     "name": str, "version": str,                      # required
     "parent_version": str | None,                     # optional, fork ancestor
-    "intent": str | None, "rationale": str | None,    # optional, human metadata
+    "intent": str | None,                             # optional, persistent goal across lineage
+    "architecture_description": str | None,           # optional, markdown describing the architecture
+    "rationale": str | None,                          # optional, what changed in this version
     "commit_hash": str | None,                        # optional, git pointer
   },
   "predictions": [{"observation_id": uuid, "value": dict}, ...],

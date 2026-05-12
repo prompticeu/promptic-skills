@@ -21,6 +21,26 @@ extraction (PDFs → structured JSON) but the contract is task-agnostic.
 > `/dashboard/.../benchmarks/ie/<uuid>` URL or mentions "IE benchmark" /
 > "Benchmark Studio" / "external runtime", you're here.
 
+## One run, one bundle (invariant)
+
+Every new run — worker, external, sandbox — corresponds to **exactly one
+bundle**. There's no such thing as a "trigger 5 stock bundles, get one
+multi-bundle run with a leaderboard inside it." Multi-bundle runs only
+exist as a legacy fallback for rows in the database that pre-date the
+current model.
+
+When a user ticks N stock bundles in the dashboard's trigger form, the
+backend fans out: `POST /runs` worker-mode creates **N independent runs**
+(one per bundle), enqueues N jobs, and returns
+`{run_ids: string[], bundle_count: N}`. Each run flows through the
+worker independently, lands in the leaderboard as its own row, and has
+its own single-bundle run-detail page. Comparing them is the dataset
+leaderboard's Compare action — not a leaderboard nested inside one run.
+
+This makes worker mode and external mode symmetric. Whether the bundle
+ran on the worker (stock) or externally (user's machine), it produces
+one run, one row, one set of predictions.
+
 ## What "external runtime" means
 
 Phase-2 of the AgentGym vision: the user's *coding agent* (you) writes a
@@ -38,7 +58,8 @@ Promptic → you:    target_schema (JSON Schema describing the answer shape)
                    gold values are NEVER returned to non-owner workspaces
 
 you → Promptic:    predictions[]  ({observation_id, value})
-                   bundle_identity ({name, version, parent_version, intent, rationale})
+                   bundle_identity ({name, version, parent_version, intent,
+                                     architecture_description, rationale})
                    token_usage, trace_ids (optional)
 ```
 
@@ -88,6 +109,7 @@ opens up.
         "version": "0.2.0",            # required, ≤50 chars
         "parent_version": "0.1.0",     # optional — the (name, version) you forked
         "intent": "...",               # optional ≤5000 chars — persistent goal
+        "architecture_description": "...",  # optional ≤20000 chars — markdown describing the architecture
         "rationale": "...",            # optional ≤2000 chars — what changed in this version
         "commit_hash": "abc123...",    # optional — git commit pointer
     },
@@ -144,6 +166,25 @@ upsert is idempotent — pushing the same version twice as the same author is
 a no-op (definition gets refreshed but no new run row is created); pushing
 as a different user gets the 409.
 
+## Where to read scores in the dashboard
+
+The **dataset page** at `/dashboard/.../benchmarks/ie/<dataset_id>` is the
+canonical leaderboard. It shows one row per `(bundle_name, bundle_version)`
+ever scored on this dataset, sourced from each bundle's *latest successful
+run*. New external pushes appear there automatically once scoring lands.
+
+- **Multi-bundle compare**: tick 2-5 rows on the dataset page → "Compare"
+  → side-by-side leaderboard + per-observation diff. URL is shareable:
+  `/.../compare?bundles=name@v1,name@v2,…`.
+- **Single-bundle deep-dive**: clicking a bundle name (or navigating to
+  `/.../bundles/<name>/<version>`) shows the bundle's identity (intent,
+  architecture_description, rationale, commit_hash), lineage chain,
+  score-over-time sparkline, and every run that scored it on this dataset.
+- **Run pages** (`/.../runs/<run_id>`) are demoted to "execution receipts" —
+  useful for diagnostics (failed runs, retry, export) but not the canonical
+  comparison surface. When a coding agent helps a user iterate, refer to
+  bundles and the dataset leaderboard, not individual runs.
+
 ## Reserved bundle names
 
 These are owned by Promptic-shipped seed bundles — picking any of them as
@@ -151,6 +192,37 @@ your `bundle_identity.name` returns 409:
 
 ```
 text-extract-single-shot, rag-extract, deep-agent, thinking-deep-agent
+```
+
+## Three identity fields, three jobs
+
+The bundle metadata has three free-text fields. Each has a specific job;
+fill them in correctly so other readers (humans + agents) can understand
+the bundle without running it.
+
+| Field | Purpose | Updates when |
+|---|---|---|
+| `intent` | The persistent *goal* across the whole lineage chain (e.g. "ESG sustainability extraction with verbatim quotes for narrative fields, exact match for GRI numerics"). Copy through unchanged from parent → child. | Rarely. |
+| `architecture_description` | A markdown summary of *what this extractor is*: the architecture, the model, the parsing approach, the prompt strategy. 2-5 sentences is plenty. Lets others read what your bundle does without running it. | When the architecture genuinely changes. |
+| `rationale` | A one-line summary of *what changed in this version vs the parent*. Targets the hypothesis you're testing. | Every push. |
+
+Example for `my-extractor@0.3.0`:
+
+```
+intent:
+  ESG sustainability extraction with verbatim quotes; exact match for GRI numerics.
+
+architecture_description:
+  Two-step retrieve + extract:
+  1. Chunk the PDF into 512-token windows with 64-token overlap.
+  2. Embed each chunk with text-embedding-3-small + cosine-rank against the field
+     description; keep top-3.
+  3. Fill the schema with one gpt-4.1-nano call per field, scoped to that field's
+     retrieved chunks.
+
+rationale:
+  v0.3.0 — added per-field retrieval. v0.2.0 saw 0.42 on supply_chain_summary
+  because the single-shot prompt didn't isolate the relevant section.
 ```
 
 ## Iteration discipline (important for the agent)
@@ -163,9 +235,15 @@ When asked to "iterate" or "improve":
    single-shot prompt sees too much irrelevant content; rerank by section
    headings before generation").
 3. Implement the change in the local extractor.
-4. Push as `v_next` with `parent_version=v_current`, `rationale="<the
-   hypothesis you just stated>"`, and **leave `intent` unchanged** (intent
-   anchors the chain; rationale captures what changed).
+4. Push as `v_next` with:
+   - `parent_version=v_current`
+   - `rationale="<the hypothesis you just stated>"` — what changed and why
+   - `architecture_description` updated **only if the architecture itself
+     genuinely changed** (added retrieval, swapped models, restructured
+     prompts). If the change was a tweak inside the same architecture
+     (different prompt wording, different temperature), copy the parent's
+     `architecture_description` through unchanged.
+   - `intent` left unchanged — it anchors the whole chain.
 5. Wait for scoring. Compare per-field deltas to the parent's scores. If
    the targeted field improved, keep iterating; if not, pop back to the
    parent and try a different hypothesis.
@@ -207,7 +285,9 @@ async def main():
             "runtime": "external",
             "bundle_identity": {
                 "name": "my-extractor", "version": "0.1.0",
-                "intent": "...", "rationale": "...",
+                "intent": "...",                    # persistent goal across the chain
+                "architecture_description": "...",  # markdown: what this extractor does
+                "rationale": "...",                 # what changed in this version vs parent
             },
             "predictions": predictions,
         })
