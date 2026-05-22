@@ -172,7 +172,7 @@ client.delete_dataset(component_id: str, dataset_id: str) -> None
 client.create_run(component_id: str, dataset_id: str, *, name=None, trace_ids=None) -> Run
 client.list_runs(component_id: str) -> RunList
 client.get_run(component_id: str, run_id: str) -> RunWithTraces
-client.delete_run(component_id: str) -> None
+client.delete_run(component_id: str, run_id: str) -> None
 ```
 
 ## Annotations
