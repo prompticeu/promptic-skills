@@ -81,10 +81,8 @@ Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJ
 
 ### Judge evaluator configs
 
-The legacy `judge` type was split into three explicit variants
-(promptic#471). Existing `judge` rows were migrated to `referenceJudge`,
-which preserves the legacy per-side scoring semantics. New evaluators must
-pick one of the three explicit types.
+Promptic supports three judge evaluator types. Choose the variant that matches
+how the judge should score the prediction against the expected output.
 
 All three judge types accept `scaleMin` / `scaleMax` and require a `config`:
 
@@ -174,7 +172,7 @@ client.delete_dataset(component_id: str, dataset_id: str) -> None
 client.create_run(component_id: str, dataset_id: str, *, name=None, trace_ids=None) -> Run
 client.list_runs(component_id: str) -> RunList
 client.get_run(component_id: str, run_id: str) -> RunWithTraces
-client.delete_run(component_id: str, run_id: str) -> None
+client.delete_run(component_id: str) -> None
 ```
 
 ## Annotations
