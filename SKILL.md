@@ -78,6 +78,39 @@ Bedrock, Mistral, Cohere, LangChain (with LangGraph / `create_agent` / deepagent
 OpenAI Agents SDK, Claude Agent SDK. All emit the official OpenTelemetry GenAI
 semantic conventions (`gen_ai.*`).
 
+### File and media artifacts
+
+Promptic automatically offloads inline base64 media and large file-like content
+from auto-instrumented spans into trace artifacts. The span keeps a lightweight
+`promptic-artifact://...` reference, and the UI/API/CLI can fetch the bytes on
+demand.
+
+Artifact uploads should avoid routing file bytes through the Promptic app server
+when the platform supports direct storage uploads. The SDK should prefer the
+storage-object flow: request a presigned upload from Promptic, upload bytes
+directly to object storage, then register the artifact metadata with Promptic.
+Only fall back to server-side `contentBase64` uploads for older servers or
+temporary compatibility. Do not ask users or coding agents to manually keep
+large base64 payloads in span attributes.
+
+Do not silently read local filesystem paths from span attributes. If the user
+wants local file contents in a trace, attach them explicitly:
+
+```python
+file_ref = promptic_sdk.artifact("/tmp/report.pdf")
+span.set_attribute("retrieval.input_file", file_ref.ref)
+```
+
+Use this helper for unsupported custom file payloads. External HTTP(S) URLs can
+remain as URLs.
+
+When debugging image/file previews in the UI, distinguish ingestion from browser
+rendering. If traces contain `promptic-artifact://...` references and artifact
+metadata exists, but images do not render, check that the frontend Content
+Security Policy allows the object-storage origin. Self-hosted or custom storage
+setups should provide `APP_STORAGE_CSP_ORIGINS` with the browser-facing storage
+origin, and production Docker/Next builds must receive that value at build time.
+
 ### ai_component context manager
 
 Tag spans with an AI Component name. The platform links traces to the matching component.
@@ -336,6 +369,8 @@ promptic workspace select <id>      # Select active workspace
 # Traces
 promptic traces list                # List recent traces
 promptic traces get <trace-id>      # Get trace with spans and events
+promptic traces artifacts <trace-id> # List trace artifacts
+promptic artifacts get <artifact-id> -o file.bin # Download artifact bytes
 promptic traces stats               # Aggregated tracing stats
 
 # Components
