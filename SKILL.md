@@ -283,7 +283,7 @@ with PrompticClient() as client:
         print(f"{summary['judgeName']}: "
               f"{len(summary['failedRunIds'])}/{summary['totalRuns']} flagged")
         for run in summary["results"]:
-            score = run.get("value")  # numeric for predefined judges, None for custom
+            score = run.get("value")  # None when status="skipped" or for verdict-only custom rubrics
             print(f"  {run['runId']}: {run['status']} score={score}")
 ```
 
