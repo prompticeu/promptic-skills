@@ -57,6 +57,8 @@ client.duplicate_experiment(
 ) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
 
+`start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
+
 ## Observations
 
 ```python
@@ -77,12 +79,47 @@ client.update_evaluator(experiment_id: str, evaluator_id: str, **data) -> Evalua
 client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
-Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional)}`.
+Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
 
-Judge evaluator configs:
+### Judge evaluator configs
 
-- `referenceJudge` / `comparisonJudge` — `config.instructions` (string): rubric text. Reference judge scores predicted and expected independently and rewards matching; comparison judge scores predicted vs expected in one prompt.
-- `generalJudge` — `config.messages` (list of `{"role": "system"|"user"|"assistant", "content": str}`): full user-defined judge prompt. Content may reference `{input}`, `{expected}`, `{predicted}`, or any dataset column name.
+Promptic supports three judge evaluator types. Choose the variant that matches
+how the judge should score the prediction against the expected output.
+
+All three judge types accept `scaleMin` / `scaleMax` and require a `config`:
+
+- `referenceJudge` — `config.instructions` (string): rubric text. The judge
+  scores predicted and expected outputs independently against the rubric
+  (caching the expected-side judgment) and rewards predictions that match or
+  exceed the expected score. Best for intrinsic quality rubrics.
+- `comparisonJudge` — `config.instructions` (string): rubric text. The judge
+  sees predicted and expected together in one prompt and scores how they
+  compare. Best for rubrics that relate the two outputs (e.g. structural
+  match).
+- `generalJudge` — `config.messages` (list of `{role, content}`): full
+  multi-message prompt. `role` is `system` / `user` / `assistant`. `content`
+  may reference `{input}`, `{expected}`, `{predicted}`, or any dataset
+  column name; unknown `{tokens}` are left as-is so misreferences are
+  visible in the rendered prompt.
+
+```python
+client.create_evaluators(exp_id, [
+    {
+        "name": "quality",
+        "type": "referenceJudge",
+        "weight": 1.0,
+        "scaleMin": 1,
+        "scaleMax": 5,
+        "config": {
+            "instructions": (
+                "Score the answer's factual accuracy. "
+                "5 = fully accurate and well-supported; "
+                "1 = incorrect or unsupported."
+            ),
+        },
+    },
+])
+```
 
 ### `structuredOutput` evaluator config
 
@@ -159,6 +196,8 @@ client.list_evaluations(component_id: str) -> AgentEvaluationList
 client.get_evaluation(component_id: str, evaluation_id: str) -> AgentEvaluation
 client.wait_for_evaluation(component_id: str, evaluation_id: str, *, max_wait=300, poll_interval=2) -> AgentEvaluation
 ```
+
+`create_evaluation` raises `PrompticAPIError` with status `402` under the same billing conditions as `start_experiment` (active subscription and payment method required, or free-tier limit) when the evaluation uses platform-managed judges.
 
 `AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with:
 
