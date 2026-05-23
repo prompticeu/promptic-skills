@@ -197,6 +197,6 @@ client.get_evaluation(component_id: str, evaluation_id: str) -> AgentEvaluation
 client.wait_for_evaluation(component_id: str, evaluation_id: str, *, max_wait=300, poll_interval=2) -> AgentEvaluation
 ```
 
-`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` list and `meta` object.
-
 `create_evaluation` raises `PrompticAPIError` with status `402` under the same billing conditions as `start_experiment` (active subscription and payment method required, or free-tier limit) when the evaluation uses platform-managed judges.
+
+`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` (heuristic findings), `judgeResults` (per-judge results from predefined trajectory critics + custom rubrics), and `meta` (aggregate stats). See the example in `SKILL.md` for iteration patterns.
