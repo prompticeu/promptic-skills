@@ -7,11 +7,27 @@ Complete method signatures for `PrompticClient` and `AsyncPrompticClient`. Both 
 ```python
 client.list_traces(*, limit=50, offset=0, status=None, start_after=None, start_before=None) -> TraceList
 client.get_trace(trace_id: str) -> Trace
+client.list_trace_artifacts(trace_id: str) -> TraceArtifactList
+client.get_artifact(artifact_id: str) -> TraceArtifact
+client.get_artifact_content(artifact_id: str) -> bytes
+client.download_artifact(artifact_id: str, path: str | os.PathLike[str]) -> None
 client.get_stats(*, days_back=30) -> TracingStats
 ```
 
 - `status`: `"ok"` or `"error"`
 - `start_after` / `start_before`: ISO timestamp strings
+
+## Artifacts
+
+```python
+promptic_sdk.artifact(value: str | bytes | os.PathLike[str], *, mime_type=None, api_key=None, endpoint=None) -> ArtifactReference
+```
+
+Use `promptic_sdk.artifact(...)` when custom code needs to attach local files,
+bytes, or large text payloads to traces explicitly. The returned reference can be
+stored in a span attribute, for example `span.set_attribute("input_file",
+ref.ref)`. The SDK prefers direct object-storage upload via Promptic's presign
+API and only falls back to server-side base64 upload for compatibility.
 
 ## Workspace
 
