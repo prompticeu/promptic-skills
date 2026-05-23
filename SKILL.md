@@ -289,9 +289,9 @@ with PrompticClient() as client:
 
 The four predefined trajectory critics (`efficiency`, `tool_selection_accuracy`,
 `plan_adherence`, `reasoning_coherence`) flow through `judgeResults[]`, not
-`insights[]`. `efficiency` and `tool_selection_accuracy` are default-on
-(heuristic-cheap); `plan_adherence` and `reasoning_coherence` are opt-in and
-gated by `BENCHMARK_TRAJECTORY_CRITIC_LLM_ENABLED` server-side.
+`insights[]`. Any judge can return `status="skipped"` with `value=None` when
+the trace lacks the structural prerequisites for that judge — inspect
+`metadata.reason` for the cause.
 
 ## Prompt Optimization Workflow
 
