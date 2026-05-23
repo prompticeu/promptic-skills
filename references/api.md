@@ -199,11 +199,4 @@ client.wait_for_evaluation(component_id: str, evaluation_id: str, *, max_wait=30
 
 `create_evaluation` raises `PrompticAPIError` with status `402` under the same billing conditions as `start_experiment` (active subscription and payment method required, or free-tier limit) when the evaluation uses platform-managed judges.
 
-`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with:
-
-- `insights: list[Insight]` — heuristic findings (loop, tool_error, unused_tool, cost_hotspot, termination) with `severity`, `title`, `description`, `frequency`, `affectedRunIds`, `details`, `suggestedFix`.
-- `meta` — aggregate stats (`totalRuns`, `totalTokens`, `totalCostUsd`, `averageDurationMs`, `errorRate`, `analyzedAt`).
-- `judgeResults: list[LLMJudgeSummary]` — per-judge aggregates for predefined trajectory critics (`efficiency`, `tool_selection_accuracy`, `plan_adherence`, `reasoning_coherence`) and any custom `llm_judge` rubrics. Each summary has `judgeName`, `frequency`, `totalRuns`, `passedRunIds`, `failedRunIds`, and `results: list[LLMJudgeRunResult]`.
-- `enabledTypes: list[AgentEvaluatorType]` — the effective evaluator set that ran for this evaluation (DB rows merged with the default-enablement contract).
-
-`LLMJudgeRunResult` carries per-run verdicts: `runId`, `traceId`, `status` (`"passed" | "issue" | "skipped" | "failed"`), `severity`, `rationale`, `suggestedFix`, `citedSpanIds`, `value` (numeric score in `[0, 1]` for predefined judges, `None` for verdict-only custom rubrics or skipped runs), and `metadata`. Skipped runs include a `metadata.reason` explaining why (e.g. `no_reasoning_content`, `no_actions_after_plan`).
+`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` (heuristic findings), `judgeResults` (per-judge results from predefined trajectory critics + custom rubrics), and `meta` (aggregate stats). See the example in `SKILL.md` for iteration patterns. Judge runs can carry `status="skipped"` with `value=None` — inspect `metadata.reason` for the cause.
