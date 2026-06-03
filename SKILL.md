@@ -41,7 +41,7 @@ Pydantic AI ships its own OpenTelemetry emitter — enable with
 promptic login
 
 # CI/CD
-export PROMPTIC_API_KEY="pk_..."
+export PROMPTIC_API_KEY="ptc_..."
 ```
 
 Config resolution: explicit args > env vars (`PROMPTIC_API_KEY`, `PROMPTIC_ENDPOINT`) > `~/.promptic/config.toml`.
