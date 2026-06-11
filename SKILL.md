@@ -323,6 +323,11 @@ with PrompticClient() as client:
     # Same data as the legacy judgeResults summary, but one row per target
     # with judgeKey/judgeName, the target FK, score, rationale, evidence,
     # an immutable judgeSnapshot, and a version that bumps on re-run.
+    #
+    # NOTE: `list_judge_results` requires promptic-sdk with the
+    # scoped-evaluations addition (see promptic-python-sdk#29). On older
+    # SDK versions, call the underlying HTTP endpoint directly:
+    #   /api/v1/components/{component_id}/evaluations/{evaluation_id}/judge-results
     judge_rows = client.list_judge_results(comp_id, evaluation["id"])
     for row in judge_rows["rows"]:
         target_id = (

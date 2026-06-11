@@ -210,7 +210,7 @@ client.delete_annotation(component_id: str, run_id: str, annotation_id: str) -> 
 client.create_evaluation(component_id: str, dataset_id: str, *, name=None, run_id=None) -> AgentEvaluation
 client.list_evaluations(component_id: str) -> AgentEvaluationList
 client.get_evaluation(component_id: str, evaluation_id: str) -> AgentEvaluation
-client.list_judge_results(component_id: str, evaluation_id: str) -> JudgeResultList
+client.list_judge_results(component_id: str, evaluation_id: str) -> JudgeResultList  # SDK side requires promptic-python-sdk#29
 client.wait_for_evaluation(component_id: str, evaluation_id: str, *, max_wait=300, poll_interval=2) -> AgentEvaluation
 ```
 
