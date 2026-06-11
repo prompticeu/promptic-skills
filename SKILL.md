@@ -351,12 +351,24 @@ new row with an incremented `version` rather than overwriting prior results.
 ### Evaluation scope
 
 Each evaluation has a `subject` (`"output" | "trajectory" | "annotation"`) and
-a `targetType` (`"trace" | "run" | "dataset"`). The anchor IDs follow the
-target type: trace evaluations populate only `traceDbId`, dataset evaluations
-populate only `datasetId`, and run evaluations populate both `runId` and
-`datasetId` (because a run belongs to a dataset). `subject` is independent of
-`targetType` — a `trajectory` subject can be scored against a stored trace
-(`trace` target) or per-item across a dataset/run.
+a `targetType` (`"trace" | "run" | "dataset"`). They are orthogonal: `subject`
+is the judge lens (what to score), and `targetType` is the anchor (where the
+work was stored). `targetType` has only three values; there is no
+`"annotation"` target type, so an `annotation`-subject evaluation still
+anchors to a trace, run, or dataset like any other subject.
+
+The evaluation envelope's anchor IDs follow the target type:
+
+- `targetType: "trace"` populates `traceDbId` only.
+- `targetType: "dataset"` populates `datasetId` only.
+- `targetType: "run"` populates both `runId` and `datasetId` (a run belongs to
+  a dataset).
+
+The concrete *thing* each judge scored is on the `JudgeResult` row, not on the
+evaluation. Per row, exactly one of `datasetItemId`, `traceDbId`,
+`annotationId`, or `runId` is non-null. So an `annotation`-subject evaluation
+anchored to a `dataset` target will produce judge-result rows where
+`annotationId` identifies the specific annotation each verdict refers to.
 
 ## Prompt Optimization Workflow
 
