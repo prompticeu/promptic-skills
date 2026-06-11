@@ -210,9 +210,10 @@ client.delete_annotation(component_id: str, run_id: str, annotation_id: str) -> 
 client.create_evaluation(component_id: str, dataset_id: str, *, name=None, run_id=None) -> AgentEvaluation
 client.list_evaluations(component_id: str) -> AgentEvaluationList
 client.get_evaluation(component_id: str, evaluation_id: str) -> AgentEvaluation
+client.list_judge_results(component_id: str, evaluation_id: str) -> JudgeResultList
 client.wait_for_evaluation(component_id: str, evaluation_id: str, *, max_wait=300, poll_interval=2) -> AgentEvaluation
 ```
 
 `create_evaluation` raises `PrompticAPIError` with status `402` under the same billing conditions as `start_experiment` (active subscription and payment method required, or free-tier limit) when the evaluation uses platform-managed judges.
 
-`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` (heuristic findings), `judgeResults` (per-judge results from predefined trajectory critics + custom rubrics), and `meta` (aggregate stats). See the example in `SKILL.md` for iteration patterns.
+`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. Each evaluation has a `subject` (`"output" | "trajectory" | "annotation"`) and a `targetType` (`"trace" | "run" | "dataset"`); the anchor IDs match the target type — `trace` populates only `traceDbId`, `dataset` only `datasetId`, and `run` populates both `runId` and `datasetId` (a run belongs to a dataset). The `results` field still contains the legacy `InsightResult` blob (`insights`, `judgeResults`, `meta`) for dataset/run evaluations; new code should prefer `list_judge_results(...)` which returns first-class `JudgeResult` rows with `judgeKey`, `judgeName`, `backend`, the target FKs (`datasetItemId` / `traceDbId` / `annotationId` / `runId`), `score`, `rationale`, `evidence`, `analysisPayload`, an immutable `judgeSnapshot`, and a `version` that increments per re-run. See the example in `SKILL.md` for iteration patterns.

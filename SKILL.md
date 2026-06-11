@@ -318,6 +318,20 @@ with PrompticClient() as client:
         for run in summary["results"]:
             score = run.get("value")  # None when status="skipped" or for verdict-only custom rubrics
             print(f"  {run['runId']}: {run['status']} score={score}")
+
+    # Canonical per-(target, judge) rows — preferred for new code.
+    # Same data as the legacy judgeResults summary, but one row per target
+    # with judgeKey/judgeName, the target FK, score, rationale, evidence,
+    # an immutable judgeSnapshot, and a version that bumps on re-run.
+    judge_rows = client.list_judge_results(comp_id, evaluation["id"])
+    for row in judge_rows["rows"]:
+        target_id = (
+            row.get("traceDbId")
+            or row.get("datasetItemId")
+            or row.get("annotationId")
+            or row.get("runId")
+        )
+        print(f"{row['judgeName']} on {target_id}: score={row['score']} v{row['version']}")
 ```
 
 The four predefined trajectory critics (`efficiency`, `tool_selection_accuracy`,
@@ -325,6 +339,24 @@ The four predefined trajectory critics (`efficiency`, `tool_selection_accuracy`,
 `insights[]`. Any judge can return `status="skipped"` with `value=None` when
 the trace lacks the structural prerequisites for that judge — inspect
 `metadata.reason` for the cause.
+
+`list_judge_results(...)` returns the canonical, versioned per-(target, judge)
+rows that back the evaluation results UI. Each row carries the judge identity
+(`judgeKey`, `judgeName`, `backend`), the concrete target it scored (exactly
+one of `datasetItemId`, `traceDbId`, `annotationId`, `runId`), the verdict
+(`score`, `rating`, `rationale`, `evidence`, `analysisPayload`), and an
+immutable `judgeSnapshot`. Re-running a judge against the same target appends a
+new row with an incremented `version` rather than overwriting prior results.
+
+### Evaluation scope
+
+Each evaluation has a `subject` (`"output" | "trajectory" | "annotation"`) and
+a `targetType` (`"trace" | "run" | "dataset"`). The anchor IDs follow the
+target type: trace evaluations populate only `traceDbId`, dataset evaluations
+populate only `datasetId`, and run evaluations populate both `runId` and
+`datasetId` (because a run belongs to a dataset). `subject` is independent of
+`targetType` — a `trajectory` subject can be scored against a stored trace
+(`trace` target) or per-item across a dataset/run.
 
 ## Prompt Optimization Workflow
 
