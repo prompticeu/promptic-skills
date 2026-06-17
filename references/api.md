@@ -52,7 +52,7 @@ client.create_experiment(
     ai_component_id: str,
     target_model: str,
     *,
-    task_type="classification",      # "classification" | "textGeneration" | "structuredOutput" | "toolSelection"
+    task_type="classification",      # "classification" | "textGeneration" | "structuredOutput"
     initial_prompt=None,
     name=None,
     description=None,
@@ -75,7 +75,7 @@ client.duplicate_experiment(
 
 `start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
-The `toolSelection` task type is reserved for MCP tool-description optimization — new MCP experiments are bootstrapped from the dashboard wizard (the per-experiment tool configs are not exposed over the public API), but existing MCP experiments come back through these endpoints with `taskType: "toolSelection"`.
+The platform also supports a fourth task type, `toolSelection`, for MCP tool-description optimization — but it is **not a valid `task_type` for `create_experiment`**. MCP experiments are bootstrapped from the dashboard wizard (the per-experiment tool configs are not exposed over the public API). Treat `taskType: "toolSelection"` as a read-only value surfaced by `list_experiments(...)` / `get_experiment(...)` for existing MCP experiments, and use the dashboard wizard to create new ones.
 
 ## Observations
 
@@ -88,7 +88,7 @@ client.delete_observation(experiment_id: str, observation_id: int) -> None
 
 Observation dict format: `{"variables": dict[str, Any], "expected": str, "split": str (optional, default "eval")}`.
 
-For `toolSelection` experiments, `variables` carries the user query (e.g. `{"input": "..."}`) and `expected` is the tool name that should be selected — or the empty string `""` when the query should not trigger any tool.
+For `toolSelection` experiments returned by the API, `variables` carries the user query (e.g. `{"input": "..."}`) and `expected` is the tool name that should be selected — or the empty string `""` when the query should not trigger any tool.
 
 ## Evaluators
 
@@ -99,7 +99,9 @@ client.update_evaluator(experiment_id: str, evaluator_id: str, **data) -> Evalua
 client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
-Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput"|"toolSelection", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+
+Reading evaluators back via `list_evaluators(...)` for an MCP experiment also surfaces the `"toolSelection"` evaluator type, but it is not a value to pass into `create_evaluators(...)` — see `toolSelection` evaluator below.
 
 ### Judge evaluator configs
 
@@ -160,7 +162,7 @@ The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, t
 
 ### `toolSelection` evaluator
 
-The `toolSelection` evaluator is automatically configured for MCP optimization experiments and is fixed to a `[0.0, 1.0]` scale. It scores `1.0` when the predicted tool name matches `expected` (case-insensitive) and `0.0` otherwise. There are no `config` keys.
+The `toolSelection` evaluator is **automatically attached by the dashboard wizard** to MCP optimization experiments — it is not user-creatable via `create_evaluators(...)`. It is fixed to a `[0.0, 1.0]` scale, scores `1.0` when the predicted tool name matches `expected` (case-insensitive) and `0.0` otherwise, and takes no `config` keys.
 
 ## MCP tool optimization
 
