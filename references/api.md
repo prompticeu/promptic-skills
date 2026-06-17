@@ -52,7 +52,7 @@ client.create_experiment(
     ai_component_id: str,
     target_model: str,
     *,
-    task_type="classification",      # "classification" | "textGeneration" | "structuredOutput"
+    task_type="classification",      # "classification" | "textGeneration" | "structuredOutput" | "toolSelection"
     initial_prompt=None,
     name=None,
     description=None,
@@ -75,6 +75,8 @@ client.duplicate_experiment(
 
 `start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
+The `toolSelection` task type is reserved for MCP tool-description optimization — new MCP experiments are bootstrapped from the dashboard wizard (the per-experiment tool configs are not exposed over the public API), but existing MCP experiments come back through these endpoints with `taskType: "toolSelection"`.
+
 ## Observations
 
 ```python
@@ -86,6 +88,8 @@ client.delete_observation(experiment_id: str, observation_id: int) -> None
 
 Observation dict format: `{"variables": dict[str, Any], "expected": str, "split": str (optional, default "eval")}`.
 
+For `toolSelection` experiments, `variables` carries the user query (e.g. `{"input": "..."}`) and `expected` is the tool name that should be selected — or the empty string `""` when the query should not trigger any tool.
+
 ## Evaluators
 
 ```python
@@ -95,7 +99,7 @@ client.update_evaluator(experiment_id: str, evaluator_id: str, **data) -> Evalua
 client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
-Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput"|"toolSelection", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
 
 ### Judge evaluator configs
 
@@ -153,6 +157,16 @@ Supported `config` keys for the `structuredOutput` type:
 - `judge_instructions` (string, optional): domain-specific guidance shared by every field configured with `strategy=judge` or `array_strategy=judge`. Appended to the built-in *"do these convey the same essential information?"* rubric — leave unset to use the rubric on its own.
 
 The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0` instead of ~`0.55`. Re-running older experiments may show lower scores on string-heavy schemas with unrelated content.
+
+### `toolSelection` evaluator
+
+The `toolSelection` evaluator is automatically configured for MCP optimization experiments and is fixed to a `[0.0, 1.0]` scale. It scores `1.0` when the predicted tool name matches `expected` (case-insensitive) and `0.0` otherwise. There are no `config` keys.
+
+## MCP tool optimization
+
+In addition to prompt optimization, Promptic can optimize the **tool descriptions** an MCP server exposes so a downstream LLM picks the right tool for a given query. The end-to-end flow runs from the dashboard component-creation wizard — it discovers tools from the MCP server (supporting Bearer-token auth and OAuth 2.0), lets the user provide or synthesize test cases, runs an experiment with `taskType: "toolSelection"`, and persists the optimized per-tool descriptions back onto the component.
+
+The platform does not expose endpoints for creating new MCP experiments programmatically (the per-experiment tool configs are wizard-bootstrapped), but existing MCP experiments and their iterations / observations / evaluators come back through the normal SDK methods.
 
 ## Iterations
 
