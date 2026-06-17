@@ -366,6 +366,8 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
+The fourth task type, `toolSelection`, is used for **MCP tool-description optimization** — Promptic discovers tools from a user-provided MCP server URL (supporting Bearer-token and OAuth 2.0 auth) and rewrites each tool's description so a downstream LLM picks the right tool. MCP experiments are bootstrapped through the dashboard wizard (the per-experiment tool configs are not exposed over the public API), but existing MCP experiments come back through the normal SDK methods with `taskType: "toolSelection"`.
+
 ## CLI
 
 The `promptic` CLI mirrors the API client. All commands support `--json` for JSON output.
@@ -455,8 +457,8 @@ promptic evaluations get <eval-id> --component <id>     # Get results
 Enums (Literal types):
 - `ExperimentStatus`: `"pending" | "scheduled" | "running" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
-- `TaskType`: `"classification" | "textGeneration" | "structuredOutput"`
-- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput"`
+- `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` (the `toolSelection` value is reserved for MCP tool-description optimization, which is bootstrapped from the dashboard wizard)
+- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"`
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"`
 - `AgentEvaluatorType`: `"loop" | "tool_error" | "unused_tool" | "cost_hotspot" | "termination" | "efficiency" | "tool_selection_accuracy" | "plan_adherence" | "reasoning_coherence"` — surfaced in `Insight.type` (heuristic) or `LLMJudgeSummary.judgeName` (predefined judges)
 - `LLMJudgeRunStatus`: `"passed" | "issue" | "skipped" | "failed"`
