@@ -164,6 +164,8 @@ client.get_best_iteration(experiment_id: str) -> IterationWithScores
 
 Iterations report two scores: `overallNormalizedScore` (train split, used to guide the search) and `evalNormalizedScore` (held-out eval split, `None` when `trainSplitRatio` is not configured on the experiment). `get_best_iteration` ranks by `evalNormalizedScore` when available, otherwise by `overallNormalizedScore`.
 
+Iterations also expose `avgPredictionLatencyMs` — the mean wall-clock duration (milliseconds) of the target-model prediction calls in that iteration, averaged across train + eval predictions. It excludes retries, rate-limit backoff, and failed attempts, so it reflects real per-call response time. `None` for runs completed before per-prediction latency tracking shipped. Useful for comparing two equally-scoring iterations on speed.
+
 ## Deployments
 
 ```python
