@@ -75,6 +75,8 @@ client.duplicate_experiment(
 
 `start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
+The platform also supports a fourth task type, `toolSelection`, for tool-description optimization (MCP servers and hand-authored tool definitions) — but it is **not a valid `task_type` for `create_experiment`**. Tool-selection experiments are bootstrapped from the dashboard wizard (the per-experiment tool configs are not exposed over the public API). Treat `taskType: "toolSelection"` as a read-only value surfaced by `list_experiments(...)` / `get_experiment(...)` for existing tool-selection experiments, and use the dashboard wizard to create new ones. Such experiments also surface three optional fields on the `Experiment` record: `systemPrompt` (the fixed system prompt used as context during evaluation, may be `None`), `optimizeSystemPrompt` (boolean — whether the optimizer is also rewriting the system prompt), and `optimizedSystemPrompt` (the best system-prompt variant the optimizer settled on, populated only when the toggle was on).
+
 ## Observations
 
 ```python
@@ -86,6 +88,8 @@ client.delete_observation(experiment_id: str, observation_id: int) -> None
 
 Observation dict format: `{"variables": dict[str, Any], "expected": str, "split": str (optional, default "eval")}`.
 
+For `toolSelection` experiments returned by the API, `variables` carries the user query (e.g. `{"input": "..."}`) and `expected` is the tool name that should be selected — or the empty string `""` when the query should not trigger any tool.
+
 ## Evaluators
 
 ```python
@@ -96,6 +100,8 @@ client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
 Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+
+Reading evaluators back via `list_evaluators(...)` for a tool-selection experiment also surfaces the `"toolSelection"` evaluator type, but it is not a value to pass into `create_evaluators(...)` — see `toolSelection` evaluator below.
 
 ### Judge evaluator configs
 
@@ -153,6 +159,20 @@ Supported `config` keys for the `structuredOutput` type:
 - `judge_instructions` (string, optional): domain-specific guidance shared by every field configured with `strategy=judge` or `array_strategy=judge`. Appended to the built-in *"do these convey the same essential information?"* rubric — leave unset to use the rubric on its own.
 
 The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0` instead of ~`0.55`. Re-running older experiments may show lower scores on string-heavy schemas with unrelated content.
+
+### `toolSelection` evaluator
+
+The `toolSelection` evaluator is **automatically attached by the dashboard wizard** to tool-selection optimization experiments — it is not user-creatable via `create_evaluators(...)`. It is fixed to a `[0.0, 1.0]` scale, scores `1.0` when the predicted tool name matches `expected` (case-insensitive) and `0.0` otherwise, and takes no `config` keys.
+
+## Tool-selection optimization
+
+In addition to prompt optimization, Promptic can optimize the **tool descriptions** an LLM sees so a downstream model picks the right tool for a given query. The end-to-end flow runs from the dashboard component-creation wizard:
+
+- **Tool sources**: tool definitions come either from an MCP server URL (Promptic auto-negotiates SSE / Streamable HTTP transport and supports Bearer-token and OAuth 2.0 auth), or from a JSON array pasted directly into the wizard. Anthropic-style (`{name, description, input_schema}`), OpenAI-function-calling-style (`{type, function: {name, description, parameters}}`), and plain (`{name, description}`) shapes are all accepted and normalized.
+- **Test cases**: each test case is a user query plus the tool that should fire (or empty for "no tool should be called"); the wizard can synthesize starter cases from the tool definitions.
+- **Optional system prompt**: a tool-selection experiment can attach an optional `systemPrompt`. When **"Also optimize the system prompt"** is on, the optimizer rewrites it alongside the tool descriptions and persists the best variant on the experiment as `optimizedSystemPrompt`.
+
+The platform does not expose endpoints for creating new tool-selection experiments programmatically (the per-experiment tool configs are wizard-bootstrapped), but existing tool-selection experiments and their iterations / observations / evaluators come back through the normal SDK methods.
 
 ## Iterations
 

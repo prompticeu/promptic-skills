@@ -366,6 +366,8 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
+The fourth task type, `toolSelection`, is used for **tool-selection optimization** — Promptic rewrites the description of each tool an LLM can call so that the model picks the right one for a given query. Tool definitions come either from an MCP server URL (with Bearer-token or OAuth 2.0 auth) that Promptic auto-discovers, or from a JSON array of tool definitions pasted directly into the wizard (Anthropic `input_schema`, OpenAI `{type, function}`, or plain `{name, description}` shapes are all normalized). A tool-selection experiment can also attach an optional `systemPrompt` (used as fixed context during evaluation) and, when the **"Also optimize the system prompt"** toggle is on, the optimizer rewrites that system prompt alongside the tool descriptions and persists the best variant as `optimizedSystemPrompt` on the experiment record. Tool-selection experiments are bootstrapped through the dashboard wizard (the per-experiment tool configs and the `toolSelection` evaluator are wizard-attached, not exposed over `create_experiment(...)` / `create_evaluators(...)`), but existing tool-selection experiments come back through the normal SDK methods with `taskType: "toolSelection"`.
+
 ## CLI
 
 The `promptic` CLI mirrors the API client. All commands support `--json` for JSON output.
@@ -455,8 +457,8 @@ promptic evaluations get <eval-id> --component <id>     # Get results
 Enums (Literal types):
 - `ExperimentStatus`: `"pending" | "scheduled" | "running" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
-- `TaskType`: `"classification" | "textGeneration" | "structuredOutput"`
-- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput"`
+- `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` is **read-only**: it is the value surfaced for tool-selection / MCP-optimization experiments by `get_experiment(...)` / `list_experiments(...)`, but it is **not** a value to pass into `create_experiment(...)`; tool-selection experiments are bootstrapped from the dashboard wizard.
+- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"` — same read-only caveat for `"toolSelection"`: it is the value surfaced by `list_evaluators(...)` on a tool-selection experiment, but it is **not** a value to pass into `create_evaluators(...)`; the `toolSelection` evaluator is wizard-attached.
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"`
 - `AgentEvaluatorType`: `"loop" | "tool_error" | "unused_tool" | "cost_hotspot" | "termination" | "efficiency" | "tool_selection_accuracy" | "plan_adherence" | "reasoning_coherence"` — surfaced in `Insight.type` (heuristic) or `LLMJudgeSummary.judgeName` (predefined judges)
 - `LLMJudgeRunStatus`: `"passed" | "issue" | "skipped" | "failed"`
