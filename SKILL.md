@@ -457,6 +457,6 @@ Enums (Literal types):
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput"`
 - `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput"`
-- `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"`
+- `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"` — `"promptic"` is the legacy v1 value retained for historical experiments; use `"prompticV2"` for new ones.
 - `AgentEvaluatorType`: `"loop" | "tool_error" | "unused_tool" | "cost_hotspot" | "termination" | "efficiency" | "tool_selection_accuracy" | "plan_adherence" | "reasoning_coherence"` — surfaced in `Insight.type` (heuristic) or `LLMJudgeSummary.judgeName` (predefined judges)
 - `LLMJudgeRunStatus`: `"passed" | "issue" | "skipped" | "failed"`
