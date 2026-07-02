@@ -75,6 +75,23 @@ client.duplicate_experiment(
 
 `start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
+### Model-grid metadata on Experiment records
+
+Experiment records returned by `get_experiment` / `list_experiments` may
+carry three optional grouping fields when the experiment was spawned by
+the dashboard's model-grid search flow (running the same prompt across
+several target models to compare cost and quality):
+
+- `modelGridId` — UUID shared by every child of the same grid search
+  (`None` for standalone experiments).
+- `modelGridSourceExperimentId` — UUID of the source experiment the grid
+  was branched from.
+- `modelGridIndex` — 0-based position of this experiment inside the grid.
+
+There is no public API to create a model-grid search; new grids are
+bootstrapped from the dashboard. Existing grid children come back through
+the normal experiment endpoints with the fields populated.
+
 ## Observations
 
 ```python
