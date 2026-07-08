@@ -366,7 +366,13 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
-The fourth task type, `toolSelection`, is used for **tool-selection optimization** — Promptic rewrites the description of each tool an LLM can call so that the model picks the right one for a given query. Tool definitions come either from an MCP server URL (with Bearer-token or OAuth 2.0 auth) that Promptic auto-discovers, or from a JSON array of tool definitions pasted directly into the wizard (Anthropic `input_schema`, OpenAI `{type, function}`, or plain `{name, description}` shapes are all normalized). A tool-selection experiment can also attach an optional `systemPrompt` (used as fixed context during evaluation) and, when the **"Also optimize the system prompt"** toggle is on, the optimizer rewrites that system prompt alongside the tool descriptions and persists the best variant as `optimizedSystemPrompt` on the experiment record. Tool-selection experiments are bootstrapped through the dashboard wizard (the per-experiment tool configs and the `toolSelection` evaluator are wizard-attached, not exposed over `create_experiment(...)` / `create_evaluators(...)`), but existing tool-selection experiments come back through the normal SDK methods with `taskType: "toolSelection"`.
+## Tool Optimization
+
+Distinct from prompt optimization, Promptic also optimizes the **tool descriptions** an LLM chooses between so the model picks the right tool for a query (task type `toolSelection`). It's a separate optimizer: the input is a set of tool definitions rather than a prompt dataset, and the output is optimized tool descriptions (plus an optional system prompt) rather than a deployable prompt.
+
+Tool definitions come either from an MCP server URL (with Bearer-token or OAuth 2.0 auth) that Promptic auto-discovers, or from a JSON array pasted directly into the wizard (Anthropic `input_schema`, OpenAI `{type, function}`, or plain `{name, description}` shapes are all normalized). A tool-optimization experiment can also attach an optional `systemPrompt` (used as fixed context during evaluation); when the **"Also optimize the system prompt"** toggle is on, the optimizer rewrites that system prompt alongside the tool descriptions and persists the best variant as `optimizedSystemPrompt` on the experiment record.
+
+Tool-optimization experiments are bootstrapped through the dashboard wizard (the per-experiment tool configs and the `toolSelection` evaluator are wizard-attached, **not** exposed over `create_experiment(...)` / `create_evaluators(...)`), but existing ones come back through the normal SDK methods with `taskType: "toolSelection"`. For these experiments `expected` holds the tool name that should fire (or `""` for "no tool should be called") and the query lives under `variables`.
 
 ## CLI
 
