@@ -366,6 +366,33 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
+### Model-grid search: compare cost / quality across models
+
+To pick between target models, fan the same prompt (and observations
+and evaluators) out across several models and compare the resulting
+runs. `start_model_grid_search` creates one child experiment per
+selection, links them with a shared `modelGridId`, and enqueues each
+through the same billing path as `start_experiment`:
+
+```python
+grid = client.start_model_grid_search(
+    exp["id"],
+    [
+        {"model": "gpt-4.1-nano"},
+        {"model": "gpt-4o-mini"},
+        {"model": "gemini-2.0-flash-exp"},
+    ],
+)
+# grid["modelGridId"], grid["experimentIds"],
+# grid["startedExperimentIds"], grid["failedExperimentIds"]
+```
+
+Between 2 and 8 distinct selections must survive normalization
+(unsupported thinking levels are silently downgraded to "no thinking"
+and duplicates are collapsed). Read the resulting runs back via
+`list_experiments` and group them by `modelGridId` — see
+`references/api.md` for the field semantics.
+
 ## CLI
 
 The `promptic` CLI mirrors the API client. All commands support `--json` for JSON output.
