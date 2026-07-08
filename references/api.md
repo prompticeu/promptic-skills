@@ -57,7 +57,7 @@ client.create_experiment(
     name=None,
     description=None,
     provider="openai",               # "openai" | "openrouter" | "custom" | "google"
-    optimizer="prompticV2",          # "promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"
+    optimizer="prompticV2",          # "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"
     hyperparameters=None,            # {"epochs": int, "trainSplitRatio": float, "numFewShots": int, "enableCot": bool}
     initial_prediction_model_schema=None,
 ) -> Experiment
