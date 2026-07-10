@@ -126,7 +126,7 @@ with promptic_sdk.ai_component("my-agent", dataset="eval-set", run="v1-baseline"
 ```
 
 Parameters:
-- `name` (str): AI Component name in the workspace
+- `name` (str): AI Component name in the AI Application
 - `dataset` (str, optional): Dataset name — traces auto-added to this dataset (created if needed)
 - `run` (str, optional): Run name — groups traces within a dataset for comparison
 
@@ -250,7 +250,7 @@ async with AsyncPrompticClient() as client:
     traces = await client.list_traces(limit=10)
 ```
 
-Constructor args: `api_key`, `access_token`, `workspace_id`, `endpoint`, `timeout` (default 30s).
+Constructor args: `api_key`, `access_token`, `ai_application_id`, `endpoint`, `timeout` (default 30s). `workspace_id` is a deprecated alias for `ai_application_id`.
 
 ### API reference
 
@@ -376,10 +376,10 @@ promptic login                      # Browser auth (device flow)
 promptic logout                     # Clear saved credentials
 promptic configure                  # Save API key & endpoint (CI/CD)
 
-# Workspace
-promptic workspace info             # Show current workspace details
-promptic workspace list             # List accessible workspaces
-promptic workspace select <id>      # Select active workspace
+# AI Application
+promptic ai-application info         # Show current AI Application details
+promptic ai-application list         # List accessible AI Applications
+promptic ai-application select <id>  # Select active AI Application
 
 # Traces
 promptic traces list                # List recent traces
