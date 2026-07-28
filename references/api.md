@@ -73,18 +73,12 @@ client.duplicate_experiment(
 ) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
 
+Each `Experiment` exposes its `aiComponentId` and a dedicated `datasetId`.
+Training and eval data are supplied as dataset cases on that dataset (see
+[Datasets](#datasets)) — there is no separate experiment-scoped observation
+resource.
+
 `start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
-
-## Observations
-
-```python
-client.list_observations(experiment_id: str) -> ObservationList
-client.create_observations(experiment_id: str, observations: list[dict]) -> ObservationList
-client.update_observation(experiment_id: str, observation_id: int, **data) -> Observation
-client.delete_observation(experiment_id: str, observation_id: int) -> None
-```
-
-Observation dict format: `{"variables": dict[str, Any], "expected": str, "split": str (optional, default "eval")}`.
 
 ## Evaluators
 
@@ -145,7 +139,7 @@ Supported `config` keys for the `structuredOutput` type:
 - `fields` (dict, optional): per-field overrides keyed by dotted JSON path. Each entry accepts:
   - `include` (bool, default `true`)
   - `weight` (float, default `1.0`)
-  - `strategy` (string): scalar comparison — `"exact" | "embedding" | "contains" | "judge"`. The `judge` value enables LLM-as-judge per-pair scoring on string fields and surfaces reasoning in the observation-details sheet.
+  - `strategy` (string): scalar comparison — `"exact" | "embedding" | "contains" | "judge"`. The `judge` value enables LLM-as-judge per-pair scoring on string fields and surfaces reasoning in the case-details sheet.
   - `array_strategy` (string): array aggregation — `"exact" | "similarity" | "judge"`. The `judge` value runs a single whole-array LLM call returning F1-compatible counts; arrays exceeding 50 items per side fall back to `similarity` with a warning marker.
 
   Whether a field counts as required is read from the JSON schema's `required` array, not from this dict — `FieldConfig` rejects unknown keys.
@@ -180,9 +174,30 @@ client.get_deployed_prompt(component_id: str) -> DeployedPrompt | None
 ```python
 client.create_dataset(component_id: str, name: str, *, description=None, trace_ids=None) -> Dataset
 client.list_datasets(component_id: str) -> DatasetList
-client.get_dataset(component_id: str, dataset_id: str) -> DatasetWithItems
+client.get_dataset(component_id: str, dataset_id: str) -> DatasetWithCases
 client.delete_dataset(component_id: str, dataset_id: str) -> None
 ```
+
+`Dataset` reports a `caseCount`; `DatasetWithCases` includes the full `cases` list.
+
+### Dataset cases
+
+Dataset cases are the canonical input/expected records used for both prompt
+optimization (an experiment's `datasetId`) and agent evaluation.
+
+```python
+client.list_dataset_cases(component_id: str, dataset_id: str) -> DatasetCaseList
+client.get_dataset_case(component_id: str, dataset_id: str, case_id: str) -> DatasetCase
+client.create_dataset_cases(component_id: str, dataset_id: str, cases: list[dict]) -> DatasetCaseList
+client.update_dataset_case(component_id: str, dataset_id: str, case_id: str, **updates) -> DatasetCase
+client.delete_dataset_case(component_id: str, dataset_id: str, case_id: str) -> None
+```
+
+`DatasetCase` create dict format: `{"inputPayload": dict[str, Any], "expectedPayload": Any (optional), "idx": int (optional), "split": str (optional, default "eval"), "metadata": dict (optional)}`.
+
+- `inputPayload` — the canonical input object (e.g. `{"message": "..."}`); its keys are the prompt variables.
+- `expectedPayload` — the expected output used by evaluators; omit for cases without a reference answer.
+- `split` — `"train"` or `"eval"`.
 
 ## Runs
 
@@ -215,4 +230,4 @@ client.wait_for_evaluation(component_id: str, evaluation_id: str, *, max_wait=30
 
 `create_evaluation` raises `PrompticAPIError` with status `402` under the same billing conditions as `start_experiment` (active subscription and payment method required, or free-tier limit) when the evaluation uses platform-managed judges.
 
-`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` (heuristic findings), `judgeResults` (per-judge results from predefined trajectory critics + custom rubrics), and `meta` (aggregate stats). See the example in `SKILL.md` for iteration patterns.
+`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` (heuristic findings), `judgeResults` (per-judge results from predefined trajectory critics + custom rubrics), and `meta` (aggregate stats). Judge results are keyed to concrete targets by `datasetCaseId`, `traceDbId`, or `runId`. See the example in `SKILL.md` for iteration patterns.
