@@ -187,10 +187,10 @@ optimization (an experiment's `datasetId`) and agent evaluation.
 
 ```python
 client.list_dataset_cases(component_id: str, dataset_id: str) -> DatasetCaseList
-client.get_dataset_case(component_id: str, dataset_id: str, case_id: str) -> DatasetCase
+client.get_dataset_case(component_id: str, dataset_id: str, case_id: int) -> DatasetCase
 client.create_dataset_cases(component_id: str, dataset_id: str, cases: list[dict]) -> DatasetCaseList
-client.update_dataset_case(component_id: str, dataset_id: str, case_id: str, **updates) -> DatasetCase
-client.delete_dataset_case(component_id: str, dataset_id: str, case_id: str) -> None
+client.update_dataset_case(component_id: str, dataset_id: str, case_id: int, **updates) -> DatasetCase
+client.delete_dataset_case(component_id: str, dataset_id: str, case_id: int) -> None
 ```
 
 `DatasetCase` create dict format: `{"inputPayload": dict[str, Any], "expectedPayload": Any (optional), "idx": int (optional), "split": str (optional, default "eval"), "metadata": dict (optional)}`.
