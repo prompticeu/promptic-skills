@@ -1,6 +1,6 @@
 ---
 name: promptic
-description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, and agent evaluation. Use when code imports `promptic_sdk`, user asks to add Promptic tracing, optimize prompts, evaluate agents, deploy prompts, or integrate with the Promptic platform. Also use when setting up OpenTelemetry-based LLM tracing, architecture tracing, workflow tracing, semantic parent/child spans, evaluation datasets, or managing AI components programmatically.
+description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, agent evaluation, and Agent Gym benchmarking. Use when code imports `promptic_sdk`; when the user asks to trace, optimize, evaluate, or deploy an agent; or when benchmarking an external agent and submitting predictions or artifacts to an Agent Gym leaderboard. Also use when setting up OpenTelemetry-based LLM tracing, architecture tracing, workflow tracing, semantic parent/child spans, evaluation datasets, or managing AI Components programmatically.
 ---
 
 # Promptic Python SDK
@@ -256,6 +256,19 @@ Constructor args: `api_key`, `access_token`, `workspace_id`, `endpoint`, `timeou
 
 For detailed method signatures and parameters, see [references/api.md](references/api.md).
 
+## Agent Gym External Submissions
+
+Use `AgentGymClient.submit(...)` or `promptic gym run` to run a trusted local
+candidate over immutable, materialized benchmark cases and submit its
+predictions to an Agent Gym leaderboard. The workflow uses the normal
+AI Application-scoped `PROMPTIC_API_KEY` (`ptc_...`).
+
+Read [references/agent-gym.md](references/agent-gym.md) before implementing an
+external submission. It covers installation, the trust boundary, structured
+predictions, output artifacts, optional trace linkage, CLI use, unreleased SDK
+testing, and an end-to-end smoke test. For exact public signatures, also read
+the Agent Gym section of [references/api.md](references/api.md).
+
 ## Agent Evaluation Workflow
 
 Evaluate agent performance using datasets, runs, and evaluations.
@@ -375,6 +388,9 @@ The `promptic` CLI mirrors the API client. All commands support `--json` for JSO
 promptic login                      # Browser auth (device flow)
 promptic logout                     # Clear saved credentials
 promptic configure                  # Save API key & endpoint (CI/CD)
+
+# Agent Gym
+promptic gym run <benchmark-id> my_agent:run --name my-agent --version 1.0.0
 
 # Workspace
 promptic workspace info             # Show current workspace details

@@ -29,6 +29,89 @@ stored in a span attribute, for example `span.set_attribute("input_file",
 ref.ref)`. The SDK prefers direct object-storage upload via Promptic's presign
 API and only falls back to server-side base64 upload for compatibility.
 
+## Agent Gym
+
+The Agent Gym API is currently implemented on the unreleased Python SDK PR
+branch `feat/agent-gym-external-submissions`.
+
+```python
+AgentGymClient(
+    endpoint: str | None = None,
+    timeout: float = 30.0,
+    api_key: str | None = None,
+    access_token: str | None = None,
+    ai_application_id: str | None = None,
+)
+
+client.submit(
+    benchmark_id: str,
+    candidate: Candidate,
+    *,
+    name: str,
+    version: str,
+    architecture_description=None,
+    revision_id=None,
+    bundle_identity=None,
+    metadata=None,
+    workdir=None,
+    idempotency_key=None,
+    capture_exceptions=True,
+    wait=True,
+    max_wait=600,
+    poll_interval=2,
+    trace_max_wait=30,
+    trace_poll_interval=0.5,
+) -> AgentGymRunResult
+```
+
+`AsyncAgentGymClient.submit(...)` has the same keyword arguments and awaits an
+async or synchronous candidate callback.
+
+Candidate inputs and results:
+
+```python
+AgentGymCase(
+    id: str,
+    ordinal: int,
+    input: dict[str, Any],
+    files: tuple[MaterializedInputFile, ...],
+    task: dict[str, Any],
+)
+
+AgentGymOutputArtifact(
+    source: pathlib.Path,
+    path: str | None = None,
+    mime_type: str | None = None,
+    role: str = "output",
+)
+
+AgentGymCaseResult.structured(value, *, artifacts=(), raw_trace_ids=())
+AgentGymCaseResult.text(value, *, artifacts=(), raw_trace_ids=())
+AgentGymCaseResult.artifact(
+    *artifacts,
+    value=None,
+    summary=None,
+    raw_trace_ids=(),
+)
+AgentGymCaseResult.failed(
+    *,
+    error_code: str,
+    error: str,
+    error_category=None,
+    retryable=False,
+    diagnostics=None,
+)
+```
+
+`AgentGymRunResult` fields: `submission_id`, `revision_id`, `run_id`,
+`bundle_id`, and `status`. `status["run"]` includes `scoring_status` and
+`eligibility_status` when a leaderboard run exists.
+
+Use `references/agent-gym.md` for the executable high-level workflow and trust
+boundary. Use the lower-level submission session methods only when the trusted
+runner must isolate untrusted candidate execution or control protocol steps
+directly.
+
 ## Workspace
 
 ```python
