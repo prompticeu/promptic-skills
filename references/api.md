@@ -57,9 +57,23 @@ client.create_experiment(
     name=None,
     description=None,
     provider="openai",               # "openai" | "openrouter" | "custom" | "google"
-    optimizer="prompticV2",          # "promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"
+    optimizer="prompticV2",          # "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"
     hyperparameters=None,            # {"epochs": int, "trainSplitRatio": float, "numFewShots": int, "enableCot": bool}
     initial_prediction_model_schema=None,
+) -> Experiment
+client.create_tool_selection_experiment(
+    ai_component_id: str,
+    *,
+    tools: list[dict],               # [{"name", "description", "input_schema"?}]
+    test_cases: list[dict],          # [{"query", "expected_tool"}]  ("" expected_tool = no tool)
+    target_model=None,               # omit to use the platform default
+    tool_source="manual",            # "manual" | "mcp"
+    system_prompt=None,
+    optimize_system_prompt=False,
+    epochs=None,
+    train_split_ratio=None,          # held-out eval split in [0.5, 0.9]
+    name=None,
+    description=None,
 ) -> Experiment
 client.get_experiment(experiment_id: str) -> Experiment
 client.update_experiment(experiment_id: str, **updates) -> Experiment
@@ -75,7 +89,7 @@ client.duplicate_experiment(
 
 `start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
-The platform also supports a fourth task type, `toolSelection`, for tool-description optimization (MCP servers and hand-authored tool definitions) — but it is **not a valid `task_type` for `create_experiment`**. Tool-selection experiments are bootstrapped from the dashboard wizard (the per-experiment tool configs are not exposed over the public API). Treat `taskType: "toolSelection"` as a read-only value surfaced by `list_experiments(...)` / `get_experiment(...)` for existing tool-selection experiments, and use the dashboard wizard to create new ones. Such experiments also surface three optional fields on the `Experiment` record: `systemPrompt` (the fixed system prompt used as context during evaluation, may be `None`), `optimizeSystemPrompt` (boolean — whether the optimizer is also rewriting the system prompt), and `optimizedSystemPrompt` (the best system-prompt variant the optimizer settled on, populated only when the toggle was on).
+The platform also supports a fourth task type, `toolSelection`, for tool-description optimization (MCP servers and hand-authored tool definitions). It is **not a valid `task_type` for `create_experiment`** — create these experiments with the dedicated `create_tool_selection_experiment(...)` method (see below), and treat `taskType: "toolSelection"` as a read-only value surfaced by `list_experiments(...)` / `get_experiment(...)` for existing ones. Such experiments also surface three optional fields on the `Experiment` record: `systemPrompt` (the fixed system prompt used as context during evaluation, may be `None`), `optimizeSystemPrompt` (boolean — whether the optimizer is also rewriting the system prompt), and `optimizedSystemPrompt` (the best system-prompt variant the optimizer settled on, populated only when the toggle was on).
 
 ## Observations
 
@@ -162,17 +176,18 @@ The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, t
 
 ### `toolSelection` evaluator
 
-The `toolSelection` evaluator is **automatically attached by the dashboard wizard** to tool-selection optimization experiments — it is not user-creatable via `create_evaluators(...)`. It is fixed to a `[0.0, 1.0]` scale, scores `1.0` when the predicted tool name matches `expected` (case-insensitive) and `0.0` otherwise, and takes no `config` keys.
+The `toolSelection` evaluator is **attached automatically when a tool-selection experiment is created** (by `create_tool_selection_experiment(...)` or the dashboard) — it is not user-creatable via `create_evaluators(...)`. It is fixed to a `[0.0, 1.0]` scale, scores `1.0` when the predicted tool name matches `expected` (case-insensitive) and `0.0` otherwise, and takes no `config` keys.
 
 ## Tool-selection optimization
 
-In addition to prompt optimization, Promptic can optimize the **tool descriptions** an LLM sees so a downstream model picks the right tool for a given query. The end-to-end flow runs from the dashboard component-creation wizard:
+In addition to prompt optimization, Promptic can optimize the **tool descriptions** an LLM sees so a downstream model picks the right tool for a given query. Create these experiments with `create_tool_selection_experiment(...)`, which atomically provisions the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment; call `start_experiment(...)` to run it. The dashboard component-creation wizard offers the same flow, and is also where you auto-discover tools from an MCP server and review the optimized descriptions (which are not returned through the public API).
 
-- **Tool sources**: tool definitions come either from an MCP server URL (Promptic auto-negotiates SSE / Streamable HTTP transport and supports Bearer-token and OAuth 2.0 auth), or from a JSON array pasted directly into the wizard. Anthropic-style (`{name, description, input_schema}`), OpenAI-function-calling-style (`{type, function: {name, description, parameters}}`), and plain (`{name, description}`) shapes are all accepted and normalized.
-- **Test cases**: each test case is a user query plus the tool that should fire (or empty for "no tool should be called"); the wizard can synthesize starter cases from the tool definitions.
-- **Optional system prompt**: a tool-selection experiment can attach an optional `systemPrompt`. When **"Also optimize the system prompt"** is on, the optimizer rewrites it alongside the tool descriptions and persists the best variant on the experiment as `optimizedSystemPrompt`.
+- **Tools** (`tools`): a list of tool definitions, each `{"name", "description"}` with an optional `input_schema` (also accepted as `inputSchema`); at least one, tool names must be unique and cannot use a reserved no-tool alias. In the dashboard, definitions can also be imported from an MCP server URL (Bearer-token or OAuth 2.0 auth) or pasted as a JSON array; Anthropic-style (`{name, description, input_schema}`), OpenAI-function-calling-style (`{type, function: {name, description, parameters}}`), and plain (`{name, description}`) shapes are all normalized. `tool_source` records the provenance as `"manual"` (default) or `"mcp"`.
+- **Test cases** (`test_cases`): each is `{"query", "expected_tool"}` — the user query plus the tool that should fire, or `""` (or a supported no-tool alias) for "no tool should be called". Each `expected_tool` must match one of the supplied tool names. At least one.
+- **Optional system prompt**: pass `system_prompt` to use as fixed context during evaluation. When `optimize_system_prompt=True`, the optimizer rewrites it alongside the tool descriptions and persists the best variant on the experiment as `optimizedSystemPrompt`.
+- **Other options**: `target_model` (omit for the platform default), `epochs` (1–5), `train_split_ratio` (held-out eval split in `[0.5, 0.9]`; omit to score on all cases), `name`, and `description`.
 
-The platform does not expose endpoints for creating new tool-selection experiments programmatically (the per-experiment tool configs are wizard-bootstrapped), but existing tool-selection experiments and their iterations / observations / evaluators come back through the normal SDK methods.
+Existing tool-selection experiments and their iterations / observations / evaluators also come back through the normal SDK methods with `taskType: "toolSelection"`.
 
 ## Iterations
 
