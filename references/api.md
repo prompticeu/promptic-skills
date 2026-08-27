@@ -29,10 +29,10 @@ stored in a span attribute, for example `span.set_attribute("input_file",
 ref.ref)`. The SDK prefers direct object-storage upload via Promptic's presign
 API and only falls back to server-side base64 upload for compatibility.
 
-## Agent Gym
+## Agent Optimization
 
-The Agent Gym API is currently implemented on the unreleased Python SDK PR
-branch `feat/agent-gym-external-submissions`.
+The user-facing feature is Agent Optimization. The Python SDK retains the
+`AgentGymClient` name and the CLI uses the `agent-gym` command group.
 
 ```python
 AgentGymClient(
@@ -43,15 +43,17 @@ AgentGymClient(
     ai_application_id: str | None = None,
 )
 
-client.submit(
+client.run_and_submit(
     benchmark_id: str,
-    candidate: Candidate,
+    executor: Candidate,
     *,
     name: str,
     version: str,
-    architecture_description=None,
+    architecture_description: str,
+    repository_url=None,
+    commit_hash=None,
     revision_id=None,
-    bundle_identity=None,
+    variant_identity=None,
     metadata=None,
     workdir=None,
     idempotency_key=None,
@@ -61,36 +63,65 @@ client.submit(
     poll_interval=2,
     trace_max_wait=30,
     trace_poll_interval=0.5,
+    trace_cases=False,
+    trace_policy="best_effort",
+    input_model=None,
 ) -> AgentGymRunResult
 ```
 
-`AsyncAgentGymClient.submit(...)` has the same keyword arguments and awaits an
+`AsyncAgentGymClient.run_and_submit(...)` has the same arguments and awaits an
 async or synchronous candidate callback.
+
+Resumable sessions:
+
+```python
+session = client.start_submission(
+    benchmark_id,
+    *,
+    idempotency_key: str,
+    variant_identity: VariantIdentity,
+    revision_id=None,
+    ttl_seconds=86400,
+)
+session.get_manifest(page_size=100)
+session.materialize_manifest(destination)
+session.add_prediction(case_id, result)
+session.finalize(*, idempotency_key, metadata=None, trace_policy="best_effort")
+session.status()
+session.wait(max_wait=600, poll_interval=2)
+session.cancel()
+session.retry_scoring()
+
+client.resume_submission(benchmark_id, submission_id)
+```
+
+`add_prediction(...)` uploads and persists the case result immediately.
+`finalize(...)` verifies exact frozen-case coverage, closes prediction writes,
+and requests scoring. Lower-level `upload_predictions(...)` accepts 1-500
+predictions and safely replaces included cases while the session remains open.
 
 Candidate inputs and results:
 
 ```python
 AgentGymCase(
-    id: str,
+    id: int,
     ordinal: int,
     input: dict[str, Any],
-    files: tuple[MaterializedInputFile, ...],
     task: dict[str, Any],
 )
 
 AgentGymOutputArtifact(
     source: pathlib.Path,
+    field_path: str,
     path: str | None = None,
     mime_type: str | None = None,
     role: str = "output",
 )
 
-AgentGymCaseResult.structured(value, *, artifacts=(), raw_trace_ids=())
-AgentGymCaseResult.text(value, *, artifacts=(), raw_trace_ids=())
+AgentGymCaseResult.succeeded(value, *, artifacts=(), raw_trace_ids=())
 AgentGymCaseResult.artifact(
     *artifacts,
-    value=None,
-    summary=None,
+    output=None,
     raw_trace_ids=(),
 )
 AgentGymCaseResult.failed(
@@ -104,13 +135,27 @@ AgentGymCaseResult.failed(
 ```
 
 `AgentGymRunResult` fields: `submission_id`, `revision_id`, `run_id`,
-`bundle_id`, and `status`. `status["run"]` includes `scoring_status` and
-`eligibility_status` when a leaderboard run exists.
+`variant_id`, and `status`. `status["run"]` includes scoring and eligibility
+state when a leaderboard run exists.
 
-Use `references/agent-gym.md` for the executable high-level workflow and trust
-boundary. Use the lower-level submission session methods only when the trusted
-runner must isolate untrusted candidate execution or control protocol steps
-directly.
+Result inspection and recovery:
+
+```python
+client.get_run_results(benchmark_id, run_id)
+client.list_case_results(benchmark_id, run_id, *, sort="score", limit=100, cursor=None)
+client.iter_case_results(benchmark_id, run_id, *, page_size=100, sort="score")
+client.get_case_result(benchmark_id, run_id, case_id)
+client.download_prediction_artifact(artifact, destination, *, overwrite=False)
+client.compare_runs(benchmark_id, *, parent_run_id, candidate_run_id)
+client.get_submission_status(benchmark_id, submission_id)
+client.wait_for_submission(benchmark_id, submission_id, *, max_wait=600, poll_interval=2)
+client.retry_scoring(benchmark_id, run_id)
+client.cancel_submission(benchmark_id, submission_id)
+```
+
+Use `references/agent-gym.md` for the executable workflow and trust boundary.
+Use the session API when the trusted runner must isolate untrusted execution,
+resume after a restart, or control protocol steps directly.
 
 ## Workspace
 

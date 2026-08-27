@@ -1,244 +1,228 @@
-# Agent Gym External Submissions
+# Agent Optimization: external submissions
 
-Use this workflow to benchmark an agent that runs outside Promptic and submit
-its results to an Agent Gym leaderboard.
+Use this workflow when a complete Agent runs in the user's environment and
+Promptic should evaluate different implementations against the same benchmark.
+Call each implementation a **variant**. Promptic owns the immutable benchmark,
+evaluation engine, scored results, and leaderboard; the external runner owns
+execution and submits the resulting evidence.
 
-## Contents
+This reference covers external configuration and submission only. Do not add
+Auto Engineer or autonomous optimization-loop behavior.
 
-- Install and authenticate
-- Keep the credential in the trusted runner
-- Implement a candidate
-- Submit with Python or the CLI
-- Link an execution trace
-- Run the minimal smoke test
+## Choose the interface
 
-## Install and authenticate
+- Use `AgentGymClient.run_and_submit(...)` for a trusted Python callback. It is
+  the shortest correct path.
+- Use `promptic agent-gym run` when the callback is importable as
+  `module:function` and a CLI workflow is more convenient.
+- Use `start_submission(...)` and the resumable session API when execution is
+  isolated, distributed, or must survive process restarts.
 
-Once the Agent Gym interface is released, install it from PyPI:
+The customer-facing feature is **Agent Optimization**. The current SDK and CLI
+retain `AgentGymClient` and `agent-gym` as technical namespaces.
+
+## Authenticate the trusted runner
+
+Install the released SDK and provide an AI Application-scoped credential:
 
 ```bash
 python -m pip install promptic-sdk
-```
-
-Create an ordinary API key for the AI Application that owns the benchmark, then
-configure the runner:
-
-```bash
 export PROMPTIC_ENDPOINT="https://promptic.eu"
-export PROMPTIC_API_KEY="ptc_REPLACE_ME"
+export PROMPTIC_API_KEY="ptc_..."
+export BENCHMARK_ID="<benchmark-uuid>"
 ```
 
-`AgentGymClient` uses the same configuration resolution as the rest of the SDK:
-explicit constructor arguments, then `PROMPTIC_API_KEY` and
-`PROMPTIC_ENDPOINT`, then saved CLI login/configuration.
+Interactive local workflows may use `promptic login` instead. The SDK resolves
+explicit constructor arguments first, then environment variables, then saved
+CLI configuration.
 
-Until then, test the implementation from the Python SDK PR branch
-`feat/agent-gym-external-submissions`:
+Keep Promptic and model-provider credentials in the trusted coordinator. Never
+give them to generated, sandboxed, or otherwise untrusted candidate code. Run
+untrusted code without platform credentials, collect its outputs, and let the
+trusted coordinator upload those outputs through a submission session.
+
+## Optionally configure the Agent externally
+
+The dashboard is not required. A coding agent or CI job can create the Agent,
+its input/output contract, evaluators, cases, and files before publishing an
+immutable benchmark version:
 
 ```bash
-python -m pip install -e /path/to/promptic-python-sdk
-
-# Or run without modifying the current environment:
-uv run --with-editable /path/to/promptic-python-sdk python smoke_agent_gym.py
-uv run --with-editable /path/to/promptic-python-sdk \
-  promptic gym run "<BENCHMARK_UUID>" smoke_agent_gym:candidate \
-  --name "external-smoke" --version "dev"
+promptic agent-gym create agent.json
+promptic agent-gym status <benchmark-id>
+promptic agent-gym publish-draft <benchmark-id>
 ```
 
-Treat the unreleased API as provisional until the SDK PR merges. Check the PR
-branch rather than guessing if a signature differs.
+The Python equivalent uses `gym.benchmarks.create(...)`, `agent.cases.add(...)`,
+and `agent.publish()`. Keep this part brief unless the user explicitly asks to
+author the benchmark; the core skill workflow is external execution and
+submission.
 
-## Keep the credential in the trusted runner
+## Implement the callback
 
-The external runner owns `PROMPTIC_API_KEY` and is responsible for
-materializing cases, uploading outputs, and finalizing the submission. Only run
-trusted callbacks in the same process as `AgentGymClient.submit(...)` or
-`promptic gym run`.
-
-Never pass the Promptic API key or authenticated client into generated,
-sandboxed, or otherwise untrusted candidate code. Run untrusted code in an
-isolated process without Promptic credentials, collect its prediction and
-files, then let the trusted runner validate and submit those results.
-
-## Implement a candidate
-
-The high-level client creates a revision-bound submission, downloads every
-benchmark case and input file, calls the candidate once per case, uploads
-returned output artifacts, resolves optional traces, finalizes all predictions,
-and polls submission and leaderboard-scoring status.
+The callback receives one materialized `AgentGymCase`. Input-file fields are
+available as local paths. Return a terminal `AgentGymCaseResult` with structured
+or text output, generated files, optional trace IDs, and useful execution
+metrics.
 
 ```python
 from pathlib import Path
 
-from promptic_sdk import (
-    AgentGymCase,
-    AgentGymCaseResult,
-    AgentGymOutputArtifact,
-)
+from promptic_sdk import AgentGymCase, AgentGymCaseResult, AgentGymOutputArtifact
 
 
-def candidate(case: AgentGymCase) -> AgentGymCaseResult:
-    input_paths = [item.local_path for item in case.files]
-    result = run_local_agent(
-        instructions=case.instructions,
-        payload=case.input,
-        files=input_paths,
-    )
-
-    return AgentGymCaseResult.structured(
+def run(case: AgentGymCase) -> AgentGymCaseResult:
+    result = run_local_agent(case.input)
+    return AgentGymCaseResult.succeeded(
         {"answer": result.answer, "confidence": result.confidence},
         artifacts=[
             AgentGymOutputArtifact(
                 source=Path(result.report_path),
+                field_path="report",
                 path="report.pdf",
                 mime_type="application/pdf",
-            ),
+            )
         ],
     )
 ```
 
-Return `AgentGymCaseResult.structured(...)` for JSON-like predictions,
-`.text(...)` for text, or `.artifact(...)` when the file itself is the primary
-output. `AgentGymOutputArtifact` accepts any local output file, including PDFs,
-HTML, images, and slide decks. Set an appropriate MIME type, for example
-`text/html`, `image/png`,
-`application/vnd.openxmlformats-officedocument.presentationml.presentation`,
-or `application/pdf`.
+Use `.succeeded(...)` for structured output, return a string for plain text,
+and use `.artifact(...)` when generated files are the primary result. Use
+`.failed(...)` for a terminal case failure instead of dropping the case.
+Generated files are prediction artifacts, not generic trace artifacts; return
+them through the case result so the SDK verifies and attaches them to the
+correct prediction. Each artifact's `field_path` must name its Output-schema
+field.
 
-Output files are submission artifacts, not generic trace artifacts. Return them
-through `AgentGymCaseResult` so the high-level runner reserves, uploads,
-verifies, and attaches them to the correct prediction.
+If tracing matters, return raw 32-character OpenTelemetry trace IDs through
+`raw_trace_ids`. The runner resolves them after ingestion and links the traces
+to the prediction. Omit them when tracing is not part of evaluation.
 
-## Submit with Python
+## Run and submit
+
+### Python
 
 ```python
+import os
+
 from promptic_sdk import AgentGymClient
+from my_agent import run
 
 with AgentGymClient() as gym:
-    result = gym.submit(
-        benchmark_id="<BENCHMARK_UUID>",
-        candidate=candidate,
-        name="my-external-agent",
-        version="1.0.0",
-        architecture_description="Trusted local runner around my agent.",
-        workdir=".promptic-agent-gym",
+    result = gym.run_and_submit(
+        benchmark_id=os.environ["BENCHMARK_ID"],
+        executor=run,
+        name="invoice-agent",
+        version="1.2.0",
+        architecture_description=(
+            "Extract the document, validate required fields, and generate a "
+            "review report before returning the structured result."
+        ),
+        repository_url="https://github.com/acme/invoice-agent",
+        commit_hash="<git-commit>",
     )
 
 print(result.run_id)
-print(result.status["status"])
-if result.status["run"]:
-    print(result.status["run"]["scoring_status"])
-    print(result.status["run"]["eligibility_status"])
 ```
 
-By default, `submit()` waits for the submission and leaderboard evaluation.
-Pass `wait=False` to return after finalization is queued.
+Give each variant a stable name and version. Include the repository URL, commit
+hash, and a useful architecture description when available so a winning run is
+reproducible. For a child variant, provide parent identity plus a rationale and
+the intended behavioral effect.
 
-## Submit with the CLI
-
-Expose the candidate as an importable `module:function`, then run:
+### CLI
 
 ```bash
-promptic gym run "<BENCHMARK_UUID>" my_agent:candidate \
-  --name "my-external-agent" \
-  --version "1.0.0" \
-  --workdir ".promptic-agent-gym" \
-  --json
+promptic agent-gym run "$BENCHMARK_ID" my_agent:run \
+  --name invoice-agent \
+  --version 1.2.0 \
+  --architecture architecture.md
 ```
 
-Use `--revision-id "<REVISION_UUID>"` to pin a published revision,
-`--idempotency-key "<STABLE_RETRY_KEY>"` for retry-safe execution, or
-`--no-wait` to return after scoring is queued.
+The high-level workflow materializes the frozen cases, executes the callback,
+uploads generated files, and persists each completed prediction immediately.
+Only after every frozen case has a terminal prediction does it submit the
+session for scoring. A missing prediction therefore produces an explicit
+incomplete-submission error instead of silently scoring partial coverage.
 
-## Link an execution trace
-
-Initialize tracing with the same endpoint and AI Application key. Inside the
-candidate, capture the active span's raw 32-hex OpenTelemetry trace ID and
-return it in `raw_trace_ids`:
+## Use a resumable session for isolated execution
 
 ```python
-from opentelemetry import trace
-
-import promptic_sdk
-from promptic_sdk import AgentGymCaseResult
-
-promptic_sdk.init(service_name="agent-gym-external-runner")
-tracer = trace.get_tracer(__name__)
-
-
-def traced_candidate(case):
-    with tracer.start_as_current_span("agent_gym.case") as span:
-        prediction = run_local_agent(case.input)
-        raw_trace_id = f"{span.get_span_context().trace_id:032x}"
-        return AgentGymCaseResult.structured(
-            prediction,
-            raw_trace_ids=[raw_trace_id],
-        )
-```
-
-The high-level runner flushes the tracer provider, waits for Promptic to ingest
-and resolve each raw OTEL ID, and associates the resolved trace with its
-prediction. If tracing is unavailable, omit `raw_trace_ids`.
-
-## Minimal smoke test
-
-Use a benchmark placeholder whose published revision contains one case. This
-produces one structured prediction, uploads one HTML artifact, and links one
-trace when tracing is configured:
-
-```python
-from pathlib import Path
-
-from opentelemetry import trace
-
-import promptic_sdk
-from promptic_sdk import (
-    AgentGymCase,
-    AgentGymCaseResult,
-    AgentGymClient,
-    AgentGymOutputArtifact,
-)
-
-BENCHMARK_ID = "<BENCHMARK_UUID>"
-
-promptic_sdk.init(service_name="agent-gym-smoke")
-tracer = trace.get_tracer(__name__)
-
-
-def candidate(case: AgentGymCase) -> AgentGymCaseResult:
-    with tracer.start_as_current_span("agent_gym.smoke_case") as span:
-        report = Path("smoke-output") / case.id / "report.html"
-        report.parent.mkdir(parents=True, exist_ok=True)
-        report.write_text("<h1>Agent Gym smoke test</h1>", encoding="utf-8")
-        raw_trace_id = f"{span.get_span_context().trace_id:032x}"
-        prediction = {"answer": "smoke-ok", "case_ordinal": case.ordinal}
-
-    return AgentGymCaseResult.structured(
-        prediction,
-        artifacts=[
-            AgentGymOutputArtifact(
-                source=report,
-                path="report.html",
-                mime_type="text/html",
-            )
-        ],
-        raw_trace_ids=[raw_trace_id],
-    )
-
-
 with AgentGymClient() as gym:
-    result = gym.submit(
-        BENCHMARK_ID,
-        candidate,
-        name="external-smoke",
-        version="dev",
-        workdir=".promptic-agent-gym-smoke",
-        idempotency_key="<UNIQUE_OR_STABLE_RETRY_KEY>",
+    submission = gym.start_submission(
+        os.environ["BENCHMARK_ID"],
+        idempotency_key="invoice-agent-1.2.0-session",
+        variant_identity={
+            "name": "invoice-agent",
+            "version": "1.2.0",
+            "architecture_description": "Extract, validate, and report.",
+        },
     )
 
-print(result.run_id, result.status["status"], result.status["run"])
+    materialized = submission.materialize_manifest("./agent-inputs")
+    for case in materialized.manifest["data"]:
+        result = execute_isolated(case, materialized.files)
+        submission.add_prediction(case["dataset_case_id"], result)
+
+    submission.finalize(
+        idempotency_key="invoice-agent-1.2.0-submit",
+    )
+    status = submission.wait(max_wait=600, poll_interval=2)
 ```
 
-Set `PROMPTIC_API_KEY="ptc_REPLACE_ME"` and `PROMPTIC_ENDPOINT` in the trusted
-runner environment before executing the smoke test. Do not place real
-credentials in source code.
+`add_prediction(...)` persists the prediction immediately; it is not merely an
+in-memory staging operation. Repeating an upload safely replaces that case's
+canonical prediction while the session is open. Lower-level batch uploads are
+limited to 500 cases per request. Keep the submission ID and use
+`resume_submission(benchmark_id, submission_id)` after a process restart.
+
+Finalization verifies exact frozen-case coverage, closes further prediction
+writes, and requests scoring for the existing run. Reuse stable idempotency
+keys when retrying the same session creation or scoring submission; using the
+same key for different content returns a conflict.
+
+## Inspect and compare results
+
+```bash
+promptic agent-gym results "$BENCHMARK_ID" "$RUN_ID"
+promptic agent-gym case-results "$BENCHMARK_ID" "$RUN_ID" --sort score --limit 5
+promptic agent-gym case-result "$BENCHMARK_ID" "$RUN_ID" 42
+promptic agent-gym artifact-download \
+  "$BENCHMARK_ID" "$RUN_ID" 42 0 --output review/report.pdf
+promptic agent-gym compare-runs \
+  "$BENCHMARK_ID" "$BASELINE_RUN_ID" "$CANDIDATE_RUN_ID"
+```
+
+The SDK equivalents are `get_run_results()`, `list_case_results()`,
+`iter_case_results()`, `get_case_result()`, `download_prediction_artifact()`,
+and `compare_runs()`. Review weak and failed cases, judge reasoning, generated
+files, trace evidence, latency, and token usage; do not choose a variant from
+the mean score alone. Paired comparison requires compatible runs from the same
+immutable benchmark and evaluator setup.
+
+## Monitor and recover
+
+```bash
+promptic agent-gym submission-status "$BENCHMARK_ID" "$SUBMISSION_ID"
+promptic agent-gym submission-wait "$BENCHMARK_ID" "$SUBMISSION_ID" --max-wait 600
+promptic agent-gym retry-scoring "$BENCHMARK_ID" "$RUN_ID"
+promptic agent-gym submission-cancel "$BENCHMARK_ID" "$SUBMISSION_ID" --yes
+```
+
+- Retry scoring only after a recoverable scoring-dispatch failure. It reuses
+  the existing immutable predictions and does not rerun the Agent or create a
+  replacement leaderboard entry.
+- Rerunning the Agent creates a new empty submission session.
+- Cancel only an unsubmitted session that should accept no more predictions.
+- If required evaluator evidence is missing or evaluation fails, inspect the
+  run's eligibility state rather than treating a partial score as official.
+
+## Completion checklist
+
+- The variant identity describes the implementation that actually ran.
+- Every frozen case has one terminal prediction, including explicit failures.
+- Generated files are returned as output artifacts and trace IDs are linked
+  only when useful.
+- The session was submitted for scoring and reached a terminal state.
+- The run and weakest cases were inspected; related variants were compared
+  only when their benchmark and evaluator fingerprints are compatible.

@@ -1,6 +1,6 @@
 ---
 name: promptic
-description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, agent evaluation, and Agent Gym benchmarking. Use when code imports `promptic_sdk`; when the user asks to trace, optimize, evaluate, or deploy an agent; or when benchmarking an external agent and submitting predictions or artifacts to an Agent Gym leaderboard. Also use when setting up OpenTelemetry-based LLM tracing, architecture tracing, workflow tracing, semantic parent/child spans, evaluation datasets, or managing AI Components programmatically.
+description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, agent evaluation, and Agent Optimization. Use when code imports `promptic_sdk`; when the user asks to trace, optimize, evaluate, or deploy an agent; or when running an agent externally and submitting predictions, files, or traces for benchmark scoring. Also use for OpenTelemetry-based LLM, architecture, workflow, and semantic parent/child tracing, evaluation datasets, or programmatic AI Component management.
 ---
 
 # Promptic Python SDK
@@ -256,18 +256,19 @@ Constructor args: `api_key`, `access_token`, `workspace_id`, `endpoint`, `timeou
 
 For detailed method signatures and parameters, see [references/api.md](references/api.md).
 
-## Agent Gym External Submissions
+## Agent Optimization: external submissions
 
-Use `AgentGymClient.submit(...)` or `promptic gym run` to run a trusted local
-candidate over immutable, materialized benchmark cases and submit its
-predictions to an Agent Gym leaderboard. The workflow uses the normal
-AI Application-scoped `PROMPTIC_API_KEY` (`ptc_...`).
+Use `AgentGymClient.run_and_submit(...)` or `promptic agent-gym run` when a
+complete Agent runs outside Promptic. Promptic supplies one immutable benchmark
+version; the trusted runner executes every case and progressively persists its
+predictions, generated files, and optional traces before requesting scoring.
 
-Read [references/agent-gym.md](references/agent-gym.md) before implementing an
-external submission. It covers installation, the trust boundary, structured
-predictions, output artifacts, optional trace linkage, CLI use, unreleased SDK
-testing, and an end-to-end smoke test. For exact public signatures, also read
-the Agent Gym section of [references/api.md](references/api.md).
+Read [references/agent-gym.md](references/agent-gym.md) before implementing this
+workflow. It covers the trust boundary, callback contract, resumable sessions,
+durable uploads, scoring submission, result inspection, comparison, and
+recovery. For exact public signatures, also read the Agent Optimization section
+of [references/api.md](references/api.md). Do not add or describe Auto Engineer
+or autonomous optimization loops; they are not part of this workflow.
 
 ## Agent Evaluation Workflow
 
@@ -389,8 +390,11 @@ promptic login                      # Browser auth (device flow)
 promptic logout                     # Clear saved credentials
 promptic configure                  # Save API key & endpoint (CI/CD)
 
-# Agent Gym
-promptic gym run <benchmark-id> my_agent:run --name my-agent --version 1.0.0
+# Agent Optimization
+promptic agent-gym run <benchmark-id> my_agent:run \
+  --name my-agent --version 1.0.0 --architecture architecture.md
+promptic agent-gym results <benchmark-id> <run-id>
+promptic agent-gym compare-runs <benchmark-id> <baseline-run-id> <candidate-run-id>
 
 # Workspace
 promptic workspace info             # Show current workspace details
