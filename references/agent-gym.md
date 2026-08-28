@@ -18,6 +18,57 @@ externally run Agent variants.
 - Use `start_submission(...)` and the resumable session API when execution is
   isolated, distributed, or must survive process restarts.
 
+## Adopt an existing benchmark
+
+When a benchmark already exists, inspect and materialize it before designing a
+variant. This is read-only and does not create a submission or leaderboard run:
+
+```bash
+promptic agent-gym status "$BENCHMARK_ID"
+promptic agent-gym revisions "$BENCHMARK_ID"
+promptic agent-gym dataset-pull "$BENCHMARK_ID" --output ./benchmark-inputs
+```
+
+`status` shows the Agent definition and readiness information available to the
+credential. `revisions` identifies the active immutable version and any draft.
+`dataset-pull` writes a sanitized `manifest.json`, downloads the frozen input
+files, and replaces their temporary URLs with stable local paths.
+
+Inspect the pulled manifest's:
+
+- `task.name`, description, and public success criteria;
+- `task.inputContract` and `task.outputContract`;
+- `revision.id`, version, and case count; and
+- each case's ID, ordinal, input values, and materialized input files.
+
+The pulled dataset intentionally excludes expected outputs, expected behavior,
+private expected files, evaluator instructions, and other hidden scoring
+evidence. Implement the Agent against the public contract and inputs rather
+than attempting to infer or retrieve the hidden answers.
+
+The Python equivalent is:
+
+```python
+from promptic_sdk import AgentGymClient
+
+with AgentGymClient() as gym:
+    dataset = gym.download_dataset(
+        benchmark_id,
+        "./benchmark-inputs",
+        revision_id=None,  # Current published version
+    )
+
+print(dataset.revision)
+print(dataset.task)
+for case in dataset.cases:
+    print(case.id, case.input)
+```
+
+Pass a known `revision_id` to both `download_dataset(...)` and
+`run_and_submit(...)` when the implementation must target exactly the version
+that was inspected. Otherwise, re-check the active version immediately before
+running so a newly published draft does not silently change the test contract.
+
 ## Follow the optimization loop
 
 Agent Optimization is an evidence-driven iteration loop:

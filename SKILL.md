@@ -254,9 +254,10 @@ Agent contract, representative cases, expected behavior, evaluator selection,
 evaluator configuration, immutable versions, re-evaluation, and when variants
 must be resubmitted. Then read
 [references/agent-gym.md](references/agent-gym.md) for the trust boundary,
-callback contract, resumable sessions, durable uploads, scoring submission,
-result inspection, comparison, and recovery. For exact public signatures, also
-read the Agent Optimization section of [references/api.md](references/api.md).
+existing-benchmark discovery, callback contract, resumable sessions, durable
+uploads, scoring submission, result inspection, comparison, and recovery. For
+exact public signatures, also read the Agent Optimization section of
+[references/api.md](references/api.md).
 Do not add or describe Auto Engineer or autonomous optimization loops; they are
 not part of this workflow.
 

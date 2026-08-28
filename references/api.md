@@ -43,6 +43,15 @@ AgentGymClient(
     ai_application_id: str | None = None,
 )
 
+client.download_dataset(
+    benchmark_id: str,
+    destination: str | os.PathLike[str],
+    *,
+    revision_id: str | None = None,
+    page_size: int = 100,
+    overwrite: bool = False,
+) -> DownloadedBenchmarkDataset
+
 client.run_and_submit(
     benchmark_id: str,
     executor: Candidate,
