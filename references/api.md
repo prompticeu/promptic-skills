@@ -317,6 +317,11 @@ client.get_deployed_prompt(component_id: str) -> DeployedPrompt | None
 ```python
 client.create_dataset(component_id: str, name: str, *, description=None, trace_ids=None) -> Dataset
 client.list_datasets(component_id: str) -> DatasetList
-client.get_dataset(component_id: str, dataset_id: str) -> DatasetWithItems
+client.get_dataset(component_id: str, dataset_id: str) -> DatasetWithCases
 client.delete_dataset(component_id: str, dataset_id: str) -> None
+client.list_dataset_cases(component_id: str, dataset_id: str) -> DatasetCaseList
+client.create_dataset_cases(component_id: str, dataset_id: str, cases: DatasetCaseInput | list[DatasetCaseInput]) -> DatasetCaseList
+client.get_dataset_case(component_id: str, dataset_id: str, case_id: int) -> DatasetCase
+client.update_dataset_case(component_id: str, dataset_id: str, case_id: int, updates: DatasetCaseInput) -> DatasetCase
+client.delete_dataset_case(component_id: str, dataset_id: str, case_id: int) -> None
 ```
