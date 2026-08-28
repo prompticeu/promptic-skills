@@ -248,6 +248,19 @@ complete Agent runs outside Promptic. Promptic supplies one immutable benchmark
 version; the trusted runner executes every case and progressively persists its
 predictions, generated files, and optional traces before requesting scoring.
 
+Choose the workflow before writing code:
+
+1. **Existing benchmark:** authenticate → pull the published dataset → inspect
+   the public contract and inputs → implement → run and submit → inspect and
+   compare → iterate.
+2. **New benchmark:** author the contract, cases, and evaluators → review and
+   publish → calibrate with a baseline → begin variant iteration.
+3. **Changed benchmark:** inspect and resolve the draft → publish → re-evaluate
+   existing predictions for evaluator-only changes, or rerun variants when the
+   execution contract changed.
+4. **Isolated execution:** use a trusted coordinator and resumable session →
+   materialize inputs → persist predictions → finalize → wait or recover.
+
 When the task includes creating or revising the benchmark, first read
 [references/agent-benchmark.md](references/agent-benchmark.md). It explains the
 Agent contract, representative cases, expected behavior, evaluator selection,
@@ -312,10 +325,14 @@ promptic logout                     # Clear saved credentials
 promptic configure                  # Save API key & endpoint (CI/CD)
 
 # Agent Optimization
+promptic agent-gym status <benchmark-id>
+promptic agent-gym dataset-pull <benchmark-id> -o ./benchmark-inputs
+promptic agent-gym apply agent.json
 promptic agent-gym run <benchmark-id> my_agent:run \
   --name my-agent --version 1.0.0 --architecture architecture.md
 promptic agent-gym results <benchmark-id> <run-id>
 promptic agent-gym compare-runs <benchmark-id> <baseline-run-id> <candidate-run-id>
+promptic agent-gym reevaluate <benchmark-id> <run-id>
 
 # Workspace
 promptic workspace info             # Show current workspace details

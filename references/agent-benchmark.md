@@ -269,6 +269,28 @@ Only compare or rank runs whose execution and evaluation versions are
 compatible. If a benchmark change intentionally changes what success means,
 establish a new baseline under that version.
 
+## Calibrate before optimizing variants
+
+Do not trust a newly written evaluation plan solely because its configuration
+is valid. Calibrate it as a workflow:
+
+1. Publish the initial benchmark version.
+2. Submit a known baseline and, when practical, a deliberately weak or
+   previously rejected implementation.
+3. Inspect aggregate scores, the lowest-scoring cases, each evaluator's
+   reasoning, and any unexpected passes.
+4. Compare those judgements with a human review. Look for false positives,
+   false negatives, vague metric boundaries, hidden overlap between metrics,
+   and thresholds unsupported by examples.
+5. Revise the benchmark draft. After evaluator-only changes, publish and
+   re-evaluate the same runs. After changing cases or contracts, rerun the
+   calibration variants.
+6. Begin architecture optimization only when the evaluation ranks the known
+   examples for the right reasons.
+
+Calibration may produce several benchmark versions. Treat those as benchmark
+development, not as evidence that one Agent architecture improved.
+
 ## Review the benchmark before optimizing
 
 - Every Input-schema field is data the Agent genuinely receives.

@@ -9,7 +9,23 @@ execution and submits the resulting evidence.
 This reference covers configuring, executing, evaluating, and iterating on
 externally run Agent variants.
 
-## Choose the interface
+## Choose the workflow
+
+- **Optimize against an existing benchmark:** authenticate, pull the active
+  published revision, implement a baseline, run and submit it, inspect its
+  weakest cases and traces, then compare each child variant against it.
+- **Create a benchmark first:** authenticate with authoring access, define and
+  review the contract, cases, and evaluators, publish Version 1, calibrate the
+  resulting evaluation with a baseline, then begin variant iteration.
+- **Continue after a benchmark change:** inspect the draft, resolve conflicts,
+  publish the next version, then re-evaluate existing runs if only evaluation
+  changed or resubmit variants if execution inputs changed.
+- **Execute in an isolated or distributed environment:** keep credentials in a
+  trusted coordinator, start a resumable session, materialize the frozen
+  inputs, persist each prediction, finalize, wait, and recover by submission ID
+  after interruption.
+
+## Choose the execution interface
 
 - Use `AgentGymClient.run_and_submit(...)` for a trusted Python callback. It is
   the shortest correct path.
@@ -17,6 +33,26 @@ externally run Agent variants.
   `module:function` and a CLI workflow is more convenient.
 - Use `start_submission(...)` and the resumable session API when execution is
   isolated, distributed, or must survive process restarts.
+
+## Authenticate the trusted runner
+
+Install the released SDK and provide an AI Application-scoped credential:
+
+```bash
+python -m pip install promptic-sdk
+export PROMPTIC_ENDPOINT="https://promptic.eu"
+export PROMPTIC_API_KEY="ptc_..."
+export BENCHMARK_ID="<benchmark-uuid>"
+```
+
+Interactive local workflows may use `promptic login` instead. The SDK resolves
+explicit constructor arguments first, then environment variables, then saved
+CLI configuration.
+
+Keep Promptic and model-provider credentials in the trusted coordinator. Never
+give them to generated, sandboxed, or otherwise untrusted candidate code. Run
+untrusted code without platform credentials, collect its outputs, and let the
+trusted coordinator upload those outputs through a submission session.
 
 ## Adopt an existing benchmark
 
@@ -45,6 +81,11 @@ The pulled dataset intentionally excludes expected outputs, expected behavior,
 private expected files, evaluator instructions, and other hidden scoring
 evidence. Implement the Agent against the public contract and inputs rather
 than attempting to infer or retrieve the hidden answers.
+
+The pull is a development snapshot, not a prediction-upload format. Do not edit
+and submit `manifest.json`. `run_and_submit(...)` or a submission session
+fetches and validates its own immutable manifest when the variant actually
+runs.
 
 The Python equivalent is:
 
@@ -97,26 +138,6 @@ Agent Optimization is an evidence-driven iteration loop:
 Keep the benchmark fixed while comparing architectures. If the goal, cases,
 schemas, or evaluators change, publish a new benchmark version and establish a
 new baseline instead of treating its scores as directly comparable.
-
-## Authenticate the trusted runner
-
-Install the released SDK and provide an AI Application-scoped credential:
-
-```bash
-python -m pip install promptic-sdk
-export PROMPTIC_ENDPOINT="https://promptic.eu"
-export PROMPTIC_API_KEY="ptc_..."
-export BENCHMARK_ID="<benchmark-uuid>"
-```
-
-Interactive local workflows may use `promptic login` instead. The SDK resolves
-explicit constructor arguments first, then environment variables, then saved
-CLI configuration.
-
-Keep Promptic and model-provider credentials in the trusted coordinator. Never
-give them to generated, sandboxed, or otherwise untrusted candidate code. Run
-untrusted code without platform credentials, collect its outputs, and let the
-trusted coordinator upload those outputs through a submission session.
 
 ## Optionally configure the Agent externally
 
@@ -271,6 +292,7 @@ promptic agent-gym artifact-download \
   "$BENCHMARK_ID" "$RUN_ID" 42 0 --output review/report.pdf
 promptic agent-gym compare-runs \
   "$BENCHMARK_ID" "$BASELINE_RUN_ID" "$CANDIDATE_RUN_ID"
+promptic traces get <linked-trace-id> --json
 ```
 
 The SDK equivalents are `get_run_results()`, `list_case_results()`,
@@ -279,6 +301,18 @@ and `compare_runs()`. Review weak and failed cases, judge reasoning, generated
 files, trace evidence, latency, and token usage; do not choose a variant from
 the mean score alone. Paired comparison requires compatible runs from the same
 immutable benchmark and evaluator setup.
+
+## Promote the chosen variant
+
+Before choosing a winner, confirm that its aggregate gain is supported by
+case-level improvements and that important quality, cost, latency, artifact,
+and trace guardrails did not regress. Record the winning run ID, variant name
+and version, repository URL, and commit hash.
+
+Agent Optimization evaluates and compares external implementations; it does
+not deploy their source code or runtime configuration. Promote the selected
+implementation through the user's normal release process, then keep its run as
+the baseline for the next architecture change.
 
 ## Monitor and recover
 
