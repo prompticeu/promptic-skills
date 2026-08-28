@@ -34,11 +34,17 @@ stored in a span attribute, for example `span.set_attribute("input_file",
 ref.ref)`. The SDK prefers direct object-storage upload via Promptic's presign
 API and only falls back to server-side base64 upload for compatibility.
 
-## Workspace
+## AI Application
 
 ```python
-client.get_workspace() -> Workspace
+client.get_ai_application() -> AIApplication
 ```
+
+`get_workspace()` / `Workspace` remain as deprecated aliases. AI Application scope
+is set with the `ai_application_id` argument (or the `PROMPTIC_AI_APPLICATION_ID`
+env var), which the SDK sends as the `X-AI-Application-Id` header; the legacy
+`workspace_id` / `PROMPTIC_WORKSPACE_ID` still work. Component and artifact
+responses expose the scope as `aiApplicationId`.
 
 ## Components
 
@@ -78,7 +84,7 @@ client.duplicate_experiment(
 ) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
 
-`start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
+`start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the AI Application's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
 ## Observations
 
