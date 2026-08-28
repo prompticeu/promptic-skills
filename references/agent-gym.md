@@ -22,8 +22,9 @@ externally run Agent variants.
 
 Agent Optimization is an evidence-driven iteration loop:
 
-1. Define the benchmark: the Agent goal, input/output contract, representative
-   cases, and evaluators. Publish it as an immutable version.
+1. If the Agent does not already have a configured benchmark, define its goal,
+   input/output contract, representative cases, and evaluators, then publish an
+   immutable version. Otherwise, reuse the existing published version.
 2. Implement a baseline Agent architecture. Record a stable variant name and
    version plus its source revision and a concise architecture description.
 3. Run the variant against every frozen case, upload its predictions and
