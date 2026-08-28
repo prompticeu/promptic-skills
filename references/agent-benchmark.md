@@ -221,6 +221,54 @@ Later authoring changes remain in a draft; inspect them with `promptic
 agent-gym draft <benchmark-id>` and publish them with `promptic agent-gym
 publish-draft <benchmark-id>` only after the revised contract is coherent.
 
+## Understand benchmark versions
+
+A published benchmark version is immutable. Editing the goal, schemas, cases,
+or evaluators creates or updates a draft; it does not alter the version used by
+existing runs. The current published version remains active until the draft is
+complete and explicitly published.
+
+```bash
+promptic agent-gym revisions <benchmark-id>
+promptic agent-gym draft <benchmark-id>
+promptic agent-gym publish-draft <benchmark-id>
+```
+
+Schema changes can make existing cases invalid. Resolve every reported draft
+conflict with `resolve-draft`, edit the affected cases, or abandon the draft.
+Never weaken the schema automatically merely to make publication succeed.
+
+Publishing a draft can make existing variant results outdated in two different
+ways:
+
+| Published change | Existing prediction evidence | Required action |
+| --- | --- | --- |
+| Evaluators, evaluator weights, thresholds, rubrics, or evidence policy only | Still execution-current, but scored with the old evaluation plan | Re-evaluate the existing run. Do not rerun the Agent. |
+| Goal, cases, Input/Output contract, or other execution inputs | No longer execution-current for the new version | Run and submit the variant again against the new version. |
+
+For an evaluator-only change:
+
+```bash
+promptic agent-gym reevaluate <benchmark-id> <run-id>
+```
+
+The Python equivalent is `gym.reevaluate_run(benchmark_id, run_id)`. It creates
+a new immutable evaluation operation over the existing predictions. It does
+not create a new Agent execution.
+
+When execution inputs changed, create a new submission against the active
+version and execute every frozen case again. The prior run remains useful as
+history, but it should not be treated as current for the new benchmark version.
+
+`retry-scoring` is not re-evaluation. Use it only to recover a failed scoring
+dispatch for the same predictions and evaluation plan. Use `reevaluate` after
+an evaluator-only version change, and resubmit after an execution-affecting
+change.
+
+Only compare or rank runs whose execution and evaluation versions are
+compatible. If a benchmark change intentionally changes what success means,
+establish a new baseline under that version.
+
 ## Review the benchmark before optimizing
 
 - Every Input-schema field is data the Agent genuinely receives.

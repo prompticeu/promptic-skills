@@ -251,7 +251,8 @@ predictions, generated files, and optional traces before requesting scoring.
 When the task includes creating or revising the benchmark, first read
 [references/agent-benchmark.md](references/agent-benchmark.md). It explains the
 Agent contract, representative cases, expected behavior, evaluator selection,
-and evaluator configuration. Then read
+evaluator configuration, immutable versions, re-evaluation, and when variants
+must be resubmitted. Then read
 [references/agent-gym.md](references/agent-gym.md) for the trust boundary,
 callback contract, resumable sessions, durable uploads, scoring submission,
 result inspection, comparison, and recovery. For exact public signatures, also
