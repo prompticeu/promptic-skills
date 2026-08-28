@@ -138,23 +138,24 @@ with promptic_sdk.ai_component("customer-support-agent"):
     # All LLM calls here are attributed to this component
     ...
 
-# With dataset and run tagging for evaluation:
-with promptic_sdk.ai_component("my-agent", dataset="eval-set", run="v1-baseline"):
+# With dataset and run tagging for evaluation.
+# dataset_id is the UUID of an existing dataset (create it first via the API/CLI):
+with promptic_sdk.ai_component("my-agent", dataset_id="<dataset-uuid>", run="v1-baseline"):
     agent.run(test_input)
 ```
 
 Parameters:
 - `name` (str): AI Component name in the AI Application
-- `dataset` (str, optional): Dataset name — traces auto-added to this dataset (created if needed)
-- `run` (str, optional): Run name — groups traces within a dataset for comparison
+- `dataset_id` (str | UUID, optional): UUID of an existing dataset — traces are tagged with it and added to that dataset. The dataset must already exist; invalid UUIDs are rejected up front.
+- `run` (str, optional): Run name — groups traces within a dataset for comparison. Requires `dataset_id`.
 
 ### dataset context manager
 
-Tag spans with a dataset name independently:
+Tag spans with an existing dataset UUID independently:
 
 ```python
 with promptic_sdk.ai_component("my-agent"):
-    with promptic_sdk.dataset("eval-round-1"):
+    with promptic_sdk.dataset("<dataset-uuid>"):
         agent.run(test_input)
 ```
 
@@ -280,14 +281,20 @@ Evaluate agent performance using datasets, runs, and evaluations.
 
 ### Step 1: Run agent with tracing
 
-Instrument the agent with dataset and run tagging — traces are auto-collected:
+Instrument the agent with dataset and run tagging — traces are auto-collected.
+`dataset_id` must reference an existing dataset, so create one first (via
+`client.create_dataset(...)` or `promptic datasets create`) and reuse its id:
 
 ```python
 import promptic_sdk
+from promptic_sdk import PrompticClient
 
 promptic_sdk.init()
 
-with promptic_sdk.ai_component("my-agent", dataset="eval-set", run="v2-improved"):
+with PrompticClient() as client:
+    dataset = client.create_dataset("<component-id>", "eval-set")
+
+with promptic_sdk.ai_component("my-agent", dataset_id=dataset["id"], run="v2-improved"):
     for query in test_queries:
         agent.run(query)
 ```
@@ -361,10 +368,10 @@ with PrompticClient() as client:
         optimizer="prompticV2",      # or "miproV2", "bootstrapFewShot"
     )
 
-    # Add training observations
-    client.create_observations(exp["id"], [
-        {"variables": {"message": "Great product!"}, "expected": "positive"},
-        {"variables": {"message": "Terrible service"}, "expected": "negative"},
+    # Add training data as dataset cases on the experiment's dedicated dataset
+    client.create_dataset_cases(exp["aiComponentId"], exp["datasetId"], [
+        {"inputPayload": {"message": "Great product!"}, "expectedPayload": "positive"},
+        {"inputPayload": {"message": "Terrible service"}, "expectedPayload": "negative"},
     ])
 
     # Add evaluators
@@ -419,14 +426,8 @@ promptic experiments get <id>       # Get experiment details
 promptic experiments update <id>    # Update a pending experiment
 promptic experiments delete <id>    # Delete an experiment
 promptic experiments start <id>     # Start optimization
-promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (observations + evaluators)
+promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (dataset cases + evaluators)
 promptic experiments continue <id> [--start]                 # Clone, seed initial prompt from source's best iteration
-
-# Observations (training data)
-promptic observations list <exp-id>              # List observations
-promptic observations add <exp-id> --from-file f # Bulk import (CSV/JSONL/JSON)
-promptic observations add <exp-id> -i "..." -e "..." # Add single observation
-promptic observations delete <exp-id> <obs-id>   # Delete an observation
 
 # Evaluators
 promptic evaluators list <exp-id>                # List evaluators
@@ -447,8 +448,11 @@ promptic deployments undeploy <comp-id>          # Remove deployment
 # Datasets
 promptic datasets create --component <id> --name <n>  # Create dataset
 promptic datasets list --component <id>          # List datasets
-promptic datasets get <ds-id> --component <id>   # Get dataset with items
+promptic datasets get <ds-id> --component <id>   # Get dataset with its cases
 promptic datasets delete <ds-id> --component <id>  # Delete dataset
+# Individual dataset cases (training/eval data) are managed through the Python
+# client (create_dataset_cases / update_dataset_case / delete_dataset_case) or
+# the dataset-case REST endpoints, not a dedicated CLI command.
 
 # Runs
 promptic runs create --component <id> --dataset <ds-id>  # Create run
