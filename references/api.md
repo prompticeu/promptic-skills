@@ -70,6 +70,10 @@ client.get_experiment(experiment_id: str) -> Experiment
 client.update_experiment(experiment_id: str, **updates) -> Experiment
 client.delete_experiment(experiment_id: str) -> None
 client.start_experiment(experiment_id: str) -> ExperimentStarted
+client.start_model_grid_search(
+    experiment_id: str,              # source experiment the grid is branched from
+    model_selections: list[dict],    # 2-8 {"model": str, "thinkingLevel": str | None} entries
+) -> ModelGridSearchStarted           # {modelGridId, experimentIds, startedExperimentIds, failedExperimentIds}
 client.duplicate_experiment(
     experiment_id: str,
     *,
@@ -78,7 +82,75 @@ client.duplicate_experiment(
 ) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
 
-`start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
+`start_experiment` and `start_model_grid_search` raise `PrompticAPIError`
+with status `402` when platform billing is enabled and the workspace's
+organization has no active subscription and payment method, or is blocked
+by the free-tier limit. `start_model_grid_search` additionally raises
+`400` when fewer than 2 or more than 8 distinct selections survive
+normalization or a chosen model is not available in the workspace, and
+`404` when the source experiment is not visible to the caller.
+
+### Model-grid search
+
+Fan out a source experiment across several target-model choices to
+compare cost and quality (the API behind the dashboard's "Optimize Cost"
+flow). Each entry in `model_selections` produces one child experiment
+cloned from the source (same prompt, same observations, same
+evaluators). Children share a `modelGridId` so callers can group them
+on read.
+
+```python
+result = client.start_model_grid_search(
+    source_experiment_id,
+    [
+        {"model": "gpt-4.1-nano"},
+        {"model": "gpt-4o-mini"},
+        {"model": "gemini-2.0-flash-exp"},
+    ],
+)
+# result == {
+#   "modelGridId": "…",
+#   "experimentIds": [...],           # all children created
+#   "startedExperimentIds": [...],    # successfully enqueued
+#   "failedExperimentIds": [...],     # created but enqueue failed — retry with start_experiment
+# }
+```
+
+Notes on request shape:
+
+- Between **2 and 8** selections must survive normalization.
+  Unsupported `thinkingLevel` values are silently downgraded to "no
+  thinking" on the server, and duplicates (same model + effective
+  thinking level) are collapsed **before** the count check — so
+  `[{"model": "gpt-4.1-nano", "thinkingLevel": "high"}, {"model": "gpt-4.1-nano", "thinkingLevel": "low"}]`
+  becomes a single selection on a model without thinking support.
+- The source experiment's AI component and workspace are derived
+  server-side; the caller cannot spoof them.
+- Grid children are enqueued through the same billing + queue path as
+  `start_experiment`, so the same `402` gate applies once up front.
+
+### Model-grid metadata on Experiment records
+
+Experiment records returned by `get_experiment` / `list_experiments`
+carry three optional grouping fields for children of a model-grid
+search:
+
+- `modelGridId` — UUID shared by every child of the same grid search
+  (`None` for standalone experiments).
+- `modelGridSourceExperimentId` — UUID of the source experiment the grid
+  was branched from.
+- `modelGridIndex` — 0-based position of this experiment inside the grid.
+
+Use `modelGridId` to group children together when reading results back:
+
+```python
+runs = client.list_experiments(component_id=component_id)
+by_grid: dict[str, list] = {}
+for exp in runs["data"]:
+    grid_id = exp.get("modelGridId")
+    if grid_id:
+        by_grid.setdefault(grid_id, []).append(exp)
+```
 
 ## Observations
 
