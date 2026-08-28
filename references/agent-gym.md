@@ -6,8 +6,8 @@ Call each implementation a **variant**. Promptic owns the immutable benchmark,
 evaluation engine, scored results, and leaderboard; the external runner owns
 execution and submits the resulting evidence.
 
-This reference covers external configuration and submission only. Do not add
-Auto Engineer or autonomous optimization-loop behavior.
+This reference covers configuring, executing, evaluating, and iterating on
+externally run Agent variants.
 
 ## Choose the interface
 
@@ -18,8 +18,33 @@ Auto Engineer or autonomous optimization-loop behavior.
 - Use `start_submission(...)` and the resumable session API when execution is
   isolated, distributed, or must survive process restarts.
 
-The customer-facing feature is **Agent Optimization**. The current SDK and CLI
-retain `AgentGymClient` and `agent-gym` as technical namespaces.
+## Follow the optimization loop
+
+Agent Optimization is an evidence-driven iteration loop:
+
+1. Define the benchmark: the Agent goal, input/output contract, representative
+   cases, and evaluators. Publish it as an immutable version.
+2. Implement a baseline Agent architecture. Record a stable variant name and
+   version plus its source revision and a concise architecture description.
+3. Run the variant against every frozen case, upload its predictions and
+   evidence, submit it for scoring, and wait for evaluation to finish.
+4. Inspect the overall results and the weakest or failed cases. Review each
+   evaluator's score and reasoning, generated files, latency, and token usage.
+5. Open linked traces when the result alone does not explain a failure. Use
+   them to inspect tool selection, call order, retries, intermediate failures,
+   and slow steps.
+6. Form a concrete hypothesis and change the Agent architecture—for example
+   its instructions, model, tools, retrieval, control flow, validation, or
+   retry policy. Avoid changing several unrelated variables at once.
+7. Submit the changed implementation as a new child variant, recording its
+   parent, rationale, and intended behavioral effect.
+8. Compare the variants on the same benchmark version. Keep the change only
+   when the case-level evidence supports the aggregate improvement, then
+   repeat from step 4.
+
+Keep the benchmark fixed while comparing architectures. If the goal, cases,
+schemas, or evaluators change, publish a new benchmark version and establish a
+new baseline instead of treating its scores as directly comparable.
 
 ## Authenticate the trusted runner
 
