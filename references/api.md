@@ -17,6 +17,11 @@ client.get_stats(*, days_back=30) -> TracingStats
 - `status`: `"ok"` or `"error"`
 - `start_after` / `start_before`: ISO timestamp strings
 
+`list_traces()` and `get_stats()` do not expose the telemetry-derived `service`
+(OpenTelemetry `service.name`) and `environment` (`deployment.environment.name`)
+filters. Use the `service` and `environment` query parameters on the REST API to
+filter by them programmatically.
+
 ## Artifacts
 
 ```python
@@ -29,11 +34,17 @@ stored in a span attribute, for example `span.set_attribute("input_file",
 ref.ref)`. The SDK prefers direct object-storage upload via Promptic's presign
 API and only falls back to server-side base64 upload for compatibility.
 
-## Workspace
+## AI Application
 
 ```python
-client.get_workspace() -> Workspace
+client.get_ai_application() -> AIApplication
 ```
+
+`get_workspace()` / `Workspace` remain as deprecated aliases. AI Application scope
+is set with the `ai_application_id` argument (or the `PROMPTIC_AI_APPLICATION_ID`
+env var), which the SDK sends as the `X-AI-Application-Id` header; the legacy
+`workspace_id` / `PROMPTIC_WORKSPACE_ID` still work. Component and artifact
+responses expose the scope as `aiApplicationId`.
 
 ## Components
 
@@ -87,7 +98,7 @@ client.duplicate_experiment(
 ) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
 
-`start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the workspace's organization has no active subscription and payment method, or is blocked by the free-tier limit.
+`start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the AI Application's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
 The platform also supports a fourth task type, `toolSelection`, for tool-description optimization (MCP servers and hand-authored tool definitions). It is **not a valid `task_type` for `create_experiment`** — create these experiments with the dedicated `create_tool_selection_experiment(...)` method (see below), and treat `taskType: "toolSelection"` as a read-only value surfaced by `list_experiments(...)` / `get_experiment(...)` for existing ones. Such experiments also surface three optional fields on the `Experiment` record: `systemPrompt` (the fixed system prompt used as context during evaluation, may be `None`), `optimizeSystemPrompt` (boolean — whether the optimizer is also rewriting the system prompt), and `optimizedSystemPrompt` (the best system-prompt variant the optimizer settled on, populated only when the toggle was on).
 
@@ -167,10 +178,11 @@ Supported `config` keys for the `structuredOutput` type:
   - `weight` (float, default `1.0`)
   - `strategy` (string): scalar comparison — `"exact" | "embedding" | "contains" | "judge"`. The `judge` value enables LLM-as-judge per-pair scoring on string fields and surfaces reasoning in the observation-details sheet.
   - `array_strategy` (string): array aggregation — `"exact" | "similarity" | "judge"`. The `judge` value runs a single whole-array LLM call returning F1-compatible counts; arrays exceeding 50 items per side fall back to `similarity` with a warning marker.
+  - `judge_instructions` (string, optional): field-specific guidance appended to the built-in *"do these convey the same essential information?"* rubric for this field only. Valid only when this field's `strategy` or `array_strategy` is `judge`; setting it on a non-judged field is rejected. Omit to use the built-in rubric on its own — selecting `judge` never requires instructions.
 
   Whether a field counts as required is read from the JSON schema's `required` array, not from this dict — `FieldConfig` rejects unknown keys.
 
-- `judge_instructions` (string, optional): domain-specific guidance shared by every field configured with `strategy=judge` or `array_strategy=judge`. Appended to the built-in *"do these convey the same essential information?"* rubric — leave unset to use the rubric on its own.
+There is no evaluator-level `judge_instructions`; guidance lives on each judged field, so different fields can carry different notes.
 
 The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0` instead of ~`0.55`. Re-running older experiments may show lower scores on string-heavy schemas with unrelated content.
 
@@ -198,6 +210,8 @@ client.get_best_iteration(experiment_id: str) -> IterationWithScores
 ```
 
 Iterations report two scores: `overallNormalizedScore` (train split, used to guide the search) and `evalNormalizedScore` (held-out eval split, `None` when `trainSplitRatio` is not configured on the experiment). `get_best_iteration` ranks by `evalNormalizedScore` when available, otherwise by `overallNormalizedScore`.
+
+Iterations also expose `avgPredictionLatencyMs` — the mean wall-clock duration (milliseconds) of the target-model prediction calls in that iteration, averaged across train + eval predictions. It excludes retries, rate-limit backoff, and failed attempts, so it reflects real per-call response time. The key is **absent (or `None`)** on iterations completed before per-prediction latency tracking shipped, so use `.get("avgPredictionLatencyMs")` rather than direct subscript when handling legacy iterations. Useful for comparing two equally-scoring iterations on speed.
 
 ## Deployments
 
