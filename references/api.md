@@ -17,6 +17,11 @@ client.get_stats(*, days_back=30) -> TracingStats
 - `status`: `"ok"` or `"error"`
 - `start_after` / `start_before`: ISO timestamp strings
 
+`list_traces()` and `get_stats()` do not expose the telemetry-derived `service`
+(OpenTelemetry `service.name`) and `environment` (`deployment.environment.name`)
+filters. Use the `service` and `environment` query parameters on the REST API to
+filter by them programmatically.
+
 ## Artifacts
 
 ```python
@@ -169,6 +174,8 @@ client.get_best_iteration(experiment_id: str) -> IterationWithScores
 ```
 
 Iterations report two scores: `overallNormalizedScore` (train split, used to guide the search) and `evalNormalizedScore` (held-out eval split, `None` when `trainSplitRatio` is not configured on the experiment). `get_best_iteration` ranks by `evalNormalizedScore` when available, otherwise by `overallNormalizedScore`.
+
+Iterations also expose `avgPredictionLatencyMs` — the mean wall-clock duration (milliseconds) of the target-model prediction calls in that iteration, averaged across train + eval predictions. It excludes retries, rate-limit backoff, and failed attempts, so it reflects real per-call response time. The key is **absent (or `None`)** on iterations completed before per-prediction latency tracking shipped, so use `.get("avgPredictionLatencyMs")` rather than direct subscript when handling legacy iterations. Useful for comparing two equally-scoring iterations on speed.
 
 ## Deployments
 

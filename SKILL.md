@@ -54,7 +54,7 @@ Call `promptic_sdk.init()` once at startup. All LLM calls from installed provide
 import promptic_sdk
 from openai import OpenAI
 
-promptic_sdk.init()
+promptic_sdk.init(service_name="my-agent")
 client = OpenAI()
 
 with promptic_sdk.ai_component("my-agent"):
@@ -72,6 +72,21 @@ with promptic_sdk.ai_component("my-agent"):
 | `endpoint`         | Platform URL (falls back to `PROMPTIC_ENDPOINT`)    | `https://promptic.eu`    |
 | `auto_instrument`  | Auto-detect and instrument LLM client libraries     | `True`                   |
 | `service_name`     | OpenTelemetry `service.name` resource attribute      | —                        |
+
+The API key determines the owning AI Application. `service_name` identifies the
+emitting workload within that application; it is discovered from telemetry and
+does not need to be created in the dashboard. Set the deployment environment
+separately with the standard OpenTelemetry resource attribute so Tracing can
+filter production from development traffic:
+
+```bash
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+```
+
+Tracing surfaces `service` and `environment` as telemetry-derived filters. The
+Python SDK's `list_traces()` and `get_stats()` do not yet expose these as
+arguments — filter by them with the `service` and `environment` query
+parameters on the REST API when you need to query programmatically.
 
 Auto-detected instrumentors: OpenAI, Anthropic, Google Generative AI, Vertex AI,
 Bedrock, Mistral, Cohere, LangChain (with LangGraph / `create_agent` / deepagents),
@@ -113,11 +128,14 @@ origin, and production Docker/Next builds must receive that value at build time.
 
 ### ai_component context manager
 
-Tag spans with an AI Component name. The platform links traces to the matching component.
+Attribute spans to an existing AI Component by name. Attribution is optional and
+recorded per span, so a single trace may span several components (or none) —
+wrap a call in `ai_component(...)` only when you want those spans connected to a
+specific component. The platform links each tagged span to the matching component.
 
 ```python
 with promptic_sdk.ai_component("customer-support-agent"):
-    # All LLM calls here are tagged
+    # All LLM calls here are attributed to this component
     ...
 
 # With dataset and run tagging for evaluation:
