@@ -17,6 +17,11 @@ client.get_stats(*, days_back=30) -> TracingStats
 - `status`: `"ok"` or `"error"`
 - `start_after` / `start_before`: ISO timestamp strings
 
+`list_traces()` and `get_stats()` do not expose the telemetry-derived `service`
+(OpenTelemetry `service.name`) and `environment` (`deployment.environment.name`)
+filters. Use the `service` and `environment` query parameters on the REST API to
+filter by them programmatically.
+
 ## Artifacts
 
 ```python
