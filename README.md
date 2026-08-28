@@ -12,7 +12,7 @@ npx skills add prompticeu/promptic-skills
 
 | Skill | Description |
 |-------|-------------|
-| **promptic** | LLM tracing, prompt optimization, agent evaluation, and external Agent Optimization submissions with the Promptic Python SDK |
+| **promptic** | LLM tracing, prompt optimization, and external Agent Optimization submissions with the Promptic Python SDK |
 
 ## What are skills?
 

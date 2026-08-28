@@ -1,11 +1,12 @@
 ---
 name: promptic
-description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, agent evaluation, and Agent Optimization. Use when code imports `promptic_sdk`; when the user asks to trace, optimize, evaluate, or deploy an agent; or when running an agent externally and submitting predictions, files, or traces for benchmark scoring. Also use for OpenTelemetry-based LLM, architecture, workflow, and semantic parent/child tracing, evaluation datasets, or programmatic AI Component management.
+description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, datasets, and Agent Optimization. Use when code imports `promptic_sdk`; when the user asks to trace, optimize, benchmark, or deploy an agent or prompt; or when running an agent externally and submitting predictions, files, or traces for scoring. Also use for OpenTelemetry-based LLM, architecture, workflow, and semantic parent/child tracing, canonical datasets, or programmatic AI Component management.
 ---
 
 # Promptic Python SDK
 
-SDK and CLI for the [Promptic](https://promptic.eu) platform — LLM tracing, prompt optimization, and agent evaluation.
+SDK and CLI for the [Promptic](https://promptic.eu) platform — LLM tracing,
+prompt optimization, and Agent Optimization.
 
 ## Installation
 
@@ -120,25 +121,10 @@ with promptic_sdk.ai_component("customer-support-agent"):
     # All LLM calls here are tagged
     ...
 
-# With dataset and run tagging for evaluation:
-with promptic_sdk.ai_component("my-agent", dataset="eval-set", run="v1-baseline"):
-    agent.run(test_input)
 ```
 
 Parameters:
 - `name` (str): AI Component name in the workspace
-- `dataset` (str, optional): Dataset name — traces auto-added to this dataset (created if needed)
-- `run` (str, optional): Run name — groups traces within a dataset for comparison
-
-### dataset context manager
-
-Tag spans with a dataset name independently:
-
-```python
-with promptic_sdk.ai_component("my-agent"):
-    with promptic_sdk.dataset("eval-round-1"):
-        agent.run(test_input)
-```
 
 ### Tracing workflows with custom spans
 
@@ -222,15 +208,14 @@ RequestsInstrumentor().instrument()  # Spans exported to Promptic
 `opentelemetry-instrumentation-langchain` (≥0.60), which covers LangChain
 chains, LangGraph (`create_agent`), and deepagents with subagents. Emits the
 official OpenTelemetry GenAI semantic conventions (`gen_ai.tool.definitions`,
-`gen_ai.operation.name`, `gen_ai.usage.*`), so agent-evaluation insights
-(loops, tool errors, unused tools) work for flat agents and multi-agent
+`gen_ai.operation.name`, `gen_ai.usage.*`) for flat agents and multi-agent
 graphs uniformly.
 
 Users who prefer the LangSmith OTel bridge (e.g. for hybrid dual-export to
 LangSmith) can opt in by setting `LANGSMITH_TRACING=true` and
 `LANGSMITH_OTEL_ENABLED=true` before calling `init()`. Note: the LangSmith
-bridge does not emit tool definitions, so the "unused tools" insight will
-not fire on LangSmith-bridged traces.
+bridge does not emit tool definitions, so tool metadata may be incomplete on
+LangSmith-bridged traces.
 
 ## API Client
 
@@ -269,76 +254,6 @@ durable uploads, scoring submission, result inspection, comparison, and
 recovery. For exact public signatures, also read the Agent Optimization section
 of [references/api.md](references/api.md). Do not add or describe Auto Engineer
 or autonomous optimization loops; they are not part of this workflow.
-
-## Agent Evaluation Workflow
-
-Evaluate agent performance using datasets, runs, and evaluations.
-
-### Step 1: Run agent with tracing
-
-Instrument the agent with dataset and run tagging — traces are auto-collected:
-
-```python
-import promptic_sdk
-
-promptic_sdk.init()
-
-with promptic_sdk.ai_component("my-agent", dataset="eval-set", run="v2-improved"):
-    for query in test_queries:
-        agent.run(query)
-```
-
-### Step 2: Trigger evaluation
-
-**Option A — CLI (recommended for agentic workflows):**
-
-```bash
-# Find the component and dataset IDs
-promptic components list --json
-promptic datasets list --component <comp-id> --json
-promptic runs list --component <comp-id> --json
-
-# Run evaluation (waits for completion by default)
-promptic evaluations run <comp-id> --dataset <ds-id> --run <run-id> --name "v2-eval"
-
-# Or don't wait and check later
-promptic evaluations run <comp-id> --dataset <ds-id> --run <run-id> --no-wait
-promptic evaluations get <eval-id> --component <comp-id>
-```
-
-**Option B — Python API:**
-
-```python
-from promptic_sdk import PrompticClient
-
-with PrompticClient() as client:
-    components = client.list_components()
-    comp_id = components["data"][0]["id"]
-
-    datasets = client.list_datasets(comp_id)
-    ds_id = datasets["data"][0]["id"]
-
-    evaluation = client.create_evaluation(comp_id, ds_id, name="v2-eval")
-    result = client.wait_for_evaluation(comp_id, evaluation["id"])
-
-    # Heuristic insights (loop, tool_error, unused_tool, cost_hotspot, termination)
-    for insight in result["results"]["insights"]:
-        print(f"[{insight['severity']}] {insight['title']}: {insight['description']}")
-
-    # LLM-judge results (predefined trajectory critics + custom rubrics)
-    for summary in result["results"].get("judgeResults", []):
-        print(f"{summary['judgeName']}: "
-              f"{len(summary['failedRunIds'])}/{summary['totalRuns']} flagged")
-        for run in summary["results"]:
-            score = run.get("value")  # None when status="skipped" or for verdict-only custom rubrics
-            print(f"  {run['runId']}: {run['status']} score={score}")
-```
-
-The four predefined trajectory critics (`efficiency`, `tool_selection_accuracy`,
-`plan_adherence`, `reasoning_coherence`) flow through `judgeResults[]`, not
-`insights[]`. Any judge can return `status="skipped"` with `value=None` when
-the trace lacks the structural prerequisites for that judge — inspect
-`metadata.reason` for the cause.
 
 ## Prompt Optimization Workflow
 
@@ -452,22 +367,6 @@ promptic datasets list --component <id>          # List datasets
 promptic datasets get <ds-id> --component <id>   # Get dataset with items
 promptic datasets delete <ds-id> --component <id>  # Delete dataset
 
-# Runs
-promptic runs create --component <id> --dataset <ds-id>  # Create run
-promptic runs list --component <id>              # List runs
-promptic runs get <run-id> --component <id>      # Get run with traces
-promptic runs delete <run-id> --component <id>   # Delete run
-
-# Annotations
-promptic annotations create --component <id> --run <r> --trace <t>  # Annotate trace
-promptic annotations list --component <id> --run <r>    # List by run
-promptic annotations list --component <id> --dataset <d>  # List by dataset
-promptic annotations delete <ann-id> --component <id> --run <r>  # Delete
-
-# Evaluations
-promptic evaluations run <comp-id> --dataset <ds-id> --run <run-id>  # Run evaluation (--run required)
-promptic evaluations list --component <id>       # List evaluations
-promptic evaluations get <eval-id> --component <id>     # Get results
 ```
 
 ## Key Types
@@ -478,5 +377,3 @@ Enums (Literal types):
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput"`
 - `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput"`
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"` — `"promptic"` is the legacy v1 value retained for historical experiments; use `"prompticV2"` for new ones.
-- `AgentEvaluatorType`: `"loop" | "tool_error" | "unused_tool" | "cost_hotspot" | "termination" | "efficiency" | "tool_selection_accuracy" | "plan_adherence" | "reasoning_coherence"` — surfaced in `Insight.type` (heuristic) or `LLMJudgeSummary.judgeName` (predefined judges)
-- `LLMJudgeRunStatus`: `"passed" | "issue" | "skipped" | "failed"`
