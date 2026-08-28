@@ -248,12 +248,16 @@ complete Agent runs outside Promptic. Promptic supplies one immutable benchmark
 version; the trusted runner executes every case and progressively persists its
 predictions, generated files, and optional traces before requesting scoring.
 
-Read [references/agent-gym.md](references/agent-gym.md) before implementing this
-workflow. It covers the trust boundary, callback contract, resumable sessions,
-durable uploads, scoring submission, result inspection, comparison, and
-recovery. For exact public signatures, also read the Agent Optimization section
-of [references/api.md](references/api.md). Do not add or describe Auto Engineer
-or autonomous optimization loops; they are not part of this workflow.
+When the task includes creating or revising the benchmark, first read
+[references/agent-benchmark.md](references/agent-benchmark.md). It explains the
+Agent contract, representative cases, expected behavior, evaluator selection,
+and evaluator configuration. Then read
+[references/agent-gym.md](references/agent-gym.md) for the trust boundary,
+callback contract, resumable sessions, durable uploads, scoring submission,
+result inspection, comparison, and recovery. For exact public signatures, also
+read the Agent Optimization section of [references/api.md](references/api.md).
+Do not add or describe Auto Engineer or autonomous optimization loops; they are
+not part of this workflow.
 
 ## Prompt Optimization Workflow
 

@@ -68,20 +68,23 @@ trusted coordinator upload those outputs through a submission session.
 
 ## Optionally configure the Agent externally
 
-The dashboard is not required. A coding agent or CI job can create the Agent,
-its input/output contract, evaluators, cases, and files before publishing an
-immutable benchmark version:
+The dashboard is not required. A coding agent or CI job can define the Agent,
+its input/output contract, evaluators, cases, and files in one configuration.
+Applying a complete configuration with cases publishes its first immutable
+benchmark version:
+
+Read [agent-benchmark.md](agent-benchmark.md) before authoring one. It explains
+how to define the contracts and cases and how to choose and configure each
+Agent Optimization evaluator.
 
 ```bash
-promptic agent-gym create agent.json
+promptic agent-gym apply agent.json
 promptic agent-gym status <benchmark-id>
-promptic agent-gym publish-draft <benchmark-id>
 ```
 
 The Python equivalent uses `gym.benchmarks.create(...)`, `agent.cases.add(...)`,
-and `agent.publish()`. Keep this part brief unless the user explicitly asks to
-author the benchmark; the core skill workflow is external execution and
-submission.
+and `agent.publish()`. Later changes remain in a draft until explicitly
+published.
 
 ## Implement the callback
 
