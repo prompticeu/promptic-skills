@@ -302,6 +302,13 @@ files, trace evidence, latency, and token usage; do not choose a variant from
 the mean score alone. Paired comparison requires compatible runs from the same
 immutable benchmark and evaluator setup.
 
+Inspect `score_status_counts` before trusting an aggregate. Failed, skipped,
+and `insufficient_evidence` results indicate missing score coverage even when
+other metrics succeeded. Verifier metrics appear independently and expose
+`source_evaluator_id` plus `metric_key`; do not parse the opaque result ID.
+Per-field means use a `succeeded_only` basis and therefore need not reconcile
+with an official aggregate that zero-fills failed cases.
+
 ## Promote the chosen variant
 
 Before choosing a winner, confirm that its aggregate gain is supported by

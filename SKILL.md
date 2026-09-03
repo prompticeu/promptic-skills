@@ -55,7 +55,7 @@ Call `promptic_sdk.init()` once at startup. All LLM calls from installed provide
 import promptic_sdk
 from openai import OpenAI
 
-promptic_sdk.init()
+promptic_sdk.init(service_name="my-agent")
 client = OpenAI()
 
 with promptic_sdk.ai_component("my-agent"):
@@ -73,6 +73,21 @@ with promptic_sdk.ai_component("my-agent"):
 | `endpoint`         | Platform URL (falls back to `PROMPTIC_ENDPOINT`)    | `https://promptic.eu`    |
 | `auto_instrument`  | Auto-detect and instrument LLM client libraries     | `True`                   |
 | `service_name`     | OpenTelemetry `service.name` resource attribute      | —                        |
+
+The API key determines the owning AI Application. `service_name` identifies the
+emitting workload within that application; it is discovered from telemetry and
+does not need to be created in the dashboard. Set the deployment environment
+separately with the standard OpenTelemetry resource attribute so Tracing can
+filter production from development traffic:
+
+```bash
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production"
+```
+
+Tracing surfaces `service` and `environment` as telemetry-derived filters. The
+Python SDK's `list_traces()` and `get_stats()` do not yet expose these as
+arguments — filter by them with the `service` and `environment` query
+parameters on the REST API when you need to query programmatically.
 
 Auto-detected instrumentors: OpenAI, Anthropic, Google Generative AI, Vertex AI,
 Bedrock, Mistral, Cohere, LangChain (with LangGraph / `create_agent` / deepagents),
@@ -102,6 +117,11 @@ file_ref = promptic_sdk.artifact("/tmp/report.pdf")
 span.set_attribute("retrieval.input_file", file_ref.ref)
 ```
 
+The artifact's `name` is used as the default download filename. It defaults to a
+local file's base name; pass `name=` to override it (or to set it for bytes or
+text content), for example `promptic_sdk.artifact(pdf_bytes, name="report.pdf")`,
+and read it back from `file_ref.name`.
+
 Use this helper for unsupported custom file payloads. External HTTP(S) URLs can
 remain as URLs.
 
@@ -114,17 +134,36 @@ origin, and production Docker/Next builds must receive that value at build time.
 
 ### ai_component context manager
 
-Tag spans with an AI Component name. The platform links traces to the matching component.
+Attribute spans to an existing AI Component by name. Attribution is optional and
+recorded per span, so a single trace may span several components (or none) —
+wrap a call in `ai_component(...)` only when you want those spans connected to a
+specific component. The platform links each tagged span to the matching component.
 
 ```python
 with promptic_sdk.ai_component("customer-support-agent"):
-    # All LLM calls here are tagged
+    # All LLM calls here are attributed to this component
     ...
 
+# With dataset and run tagging for evaluation.
+# dataset_id is the UUID of an existing dataset (create it first via the API/CLI):
+with promptic_sdk.ai_component("my-agent", dataset_id="<dataset-uuid>", run="v1-baseline"):
+    agent.run(test_input)
 ```
 
 Parameters:
-- `name` (str): AI Component name in the workspace
+- `name` (str): AI Component name in the AI Application
+- `dataset_id` (str | UUID, optional): UUID of an existing dataset — traces are tagged with it and added to that dataset. The dataset must already exist; invalid UUIDs are rejected up front.
+- `run` (str, optional): Run name — groups traces within a dataset for comparison. Requires `dataset_id`.
+
+### dataset context manager
+
+Tag spans with an existing dataset UUID independently:
+
+```python
+with promptic_sdk.ai_component("my-agent"):
+    with promptic_sdk.dataset("<dataset-uuid>"):
+        agent.run(test_input)
+```
 
 ### Tracing workflows with custom spans
 
@@ -235,7 +274,7 @@ async with AsyncPrompticClient() as client:
     traces = await client.list_traces(limit=10)
 ```
 
-Constructor args: `api_key`, `access_token`, `workspace_id`, `endpoint`, `timeout` (default 30s).
+Constructor args: `api_key`, `access_token`, `ai_application_id`, `endpoint`, `timeout` (default 30s). `workspace_id` is a deprecated alias for `ai_application_id`.
 
 ### API reference
 
@@ -291,10 +330,10 @@ with PrompticClient() as client:
         optimizer="prompticV2",      # or "miproV2", "bootstrapFewShot"
     )
 
-    # Add training observations
-    client.create_observations(exp["id"], [
-        {"variables": {"message": "Great product!"}, "expected": "positive"},
-        {"variables": {"message": "Terrible service"}, "expected": "negative"},
+    # Add training data as dataset cases on the experiment's dedicated dataset
+    client.create_dataset_cases(exp["aiComponentId"], exp["datasetId"], [
+        {"inputPayload": {"message": "Great product!"}, "expectedPayload": "positive"},
+        {"inputPayload": {"message": "Terrible service"}, "expectedPayload": "negative"},
     ])
 
     # Add evaluators
@@ -334,10 +373,10 @@ promptic agent-gym results <benchmark-id> <run-id>
 promptic agent-gym compare-runs <benchmark-id> <baseline-run-id> <candidate-run-id>
 promptic agent-gym reevaluate <benchmark-id> <run-id>
 
-# Workspace
-promptic workspace info             # Show current workspace details
-promptic workspace list             # List accessible workspaces
-promptic workspace select <id>      # Select active workspace
+# AI Application
+promptic ai-application info         # Show current AI Application details
+promptic ai-application list         # List accessible AI Applications
+promptic ai-application select <id>  # Select active AI Application
 
 # Traces
 promptic traces list                # List recent traces
@@ -359,14 +398,8 @@ promptic experiments get <id>       # Get experiment details
 promptic experiments update <id>    # Update a pending experiment
 promptic experiments delete <id>    # Delete an experiment
 promptic experiments start <id>     # Start optimization
-promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (observations + evaluators)
+promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (dataset cases + evaluators)
 promptic experiments continue <id> [--start]                 # Clone, seed initial prompt from source's best iteration
-
-# Observations (training data)
-promptic observations list <exp-id>              # List observations
-promptic observations add <exp-id> --from-file f # Bulk import (CSV/JSONL/JSON)
-promptic observations add <exp-id> -i "..." -e "..." # Add single observation
-promptic observations delete <exp-id> <obs-id>   # Delete an observation
 
 # Evaluators
 promptic evaluators list <exp-id>                # List evaluators
@@ -387,8 +420,11 @@ promptic deployments undeploy <comp-id>          # Remove deployment
 # Datasets
 promptic datasets create --component <id> --name <n>  # Create dataset
 promptic datasets list --component <id>          # List datasets
-promptic datasets get <ds-id> --component <id>   # Get dataset with items
+promptic datasets get <ds-id> --component <id>   # Get dataset with its cases
 promptic datasets delete <ds-id> --component <id>  # Delete dataset
+# Individual dataset cases (training/eval data) are managed through the Python
+# client (create_dataset_cases / update_dataset_case / delete_dataset_case) or
+# the dataset-case REST endpoints, not a dedicated CLI command.
 
 ```
 

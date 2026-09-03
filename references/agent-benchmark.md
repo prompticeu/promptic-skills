@@ -62,8 +62,8 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
 | `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with `exact`, `contains`, `embedding`, or `judge`; configure arrays with `exact`, `similarity`, or `judge`. Add field-specific judge instructions only for judged fields. |
-| `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define explicit metrics, instructions for each metric, allowed evidence, tools, and an investigation budget. |
-| `TrajectoryJudge` | Tool selection, execution order, retries, or other trace behavior is itself part of correctness. | Supply a focused rubric and ensure variants submit trace IDs. |
+| `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics, instructions for each metric, selected evidence, optional per-metric bindings, and an investigation budget. |
+| `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
 Practical rules:
 
@@ -74,18 +74,27 @@ Practical rules:
 - Use `VerifierAgent` for artifact-heavy or open-ended work because it can
   investigate the selected evidence as a whole. Its metrics should name the
   distinct qualities the user actually cares about, such as correctness and
-  completeness.
-- Use `TrajectoryJudge` only when the path matters, not merely because traces
+  completeness. Define between one and eight stable snake_case metric keys.
+- Use `ExpectedBehaviorJudge` only when the path matters, not merely because traces
   happen to exist. Prefer outcome evaluation when different workflows may be
   equally valid.
 - Combine evaluators when they measure distinct dimensions. Avoid scoring the
   same property twice under different names.
 
-Weights control contribution to the combined score. A threshold expresses the
-minimum acceptable normalized score for an evaluator or verifier metric. Leave
+Classification and field-level evaluator weights control their contribution to
+the combined score. Verifier metrics instead have independent bindings: each
+binding may set a weight up to 10 and an optional normalized threshold.
+Verifier evaluators do not have an overall weight. Leave
 thresholds unset until there is a defensible acceptance boundary; do not choose
 one from gut feeling. Calibrate evaluators against a small set of manually
 reviewed cases before trusting leaderboard order.
+
+Verifier evidence can include case input, submitted output (including generated
+files), expected behavior, expected output, and execution trace. Select only
+what each metric needs. The platform owns shell and image-inspection tools;
+they are not evaluator settings. The default investigation budget is 20 steps.
+The Expected Behavior Judge always uses case input, Expected Behavior, and the
+execution trace with its fixed `behavior_compliance` metric.
 
 Common typed configurations look like this:
 
@@ -94,7 +103,7 @@ from promptic_sdk import (
     ClassificationF1,
     FieldLevelJudge,
     FieldScoring,
-    TrajectoryJudge,
+    ExpectedBehaviorJudge,
 )
 
 classification = ClassificationF1(field_paths=("currency",))
@@ -110,12 +119,7 @@ structured = FieldLevelJudge(
     }
 )
 
-trajectory = TrajectoryJudge(
-    rubric=(
-        "Use the document tool before answering, and retry only after a "
-        "transient tool failure."
-    )
-)
+behavior = ExpectedBehaviorJudge()
 ```
 
 Pass one or more of these objects in `evaluators=[...]`. For
@@ -132,9 +136,10 @@ from promptic_sdk import (
     AgentGymClient,
     BenchmarkCase,
     BenchmarkFile,
+    EvidenceKind,
+    EvidencePolicy,
     MetricBinding,
     VerifierAgent,
-    VerifierEvidence,
     VerifierMetric,
 )
 
@@ -180,14 +185,13 @@ with AgentGymClient() as gym:
                     "correctness": MetricBinding(weight=2),
                     "report_quality": MetricBinding(weight=1),
                 },
-                evidence=VerifierEvidence(
-                    case_inputs=True,
-                    expected_behavior=True,
-                    expected_output=True,
-                    reference_files=True,
-                    submitted_output=True,
-                    submitted_artifacts=True,
-                    execution_trace=False,
+                evidence=EvidencePolicy(
+                    selected=(
+                        EvidenceKind.CASE_INPUT,
+                        EvidenceKind.SUBMITTED_OUTPUT,
+                        EvidenceKind.EXPECTED_BEHAVIOR,
+                        EvidenceKind.EXPECTED_OUTPUT,
+                    ),
                 ),
             )
         ],
@@ -243,7 +247,7 @@ ways:
 
 | Published change | Existing prediction evidence | Required action |
 | --- | --- | --- |
-| Evaluators, evaluator weights, thresholds, rubrics, or evidence policy only | Still execution-current, but scored with the old evaluation plan | Re-evaluate the existing run. Do not rerun the Agent. |
+| Evaluators, metric bindings, thresholds, instructions, model, or evidence policy only | Still execution-current, but scored with the old evaluation plan | Re-evaluate the existing run. Do not rerun the Agent. |
 | Goal, cases, Input/Output contract, or other execution inputs | No longer execution-current for the new version | Run and submit the variant again against the new version. |
 
 For an evaluator-only change:
