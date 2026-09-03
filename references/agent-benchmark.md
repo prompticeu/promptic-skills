@@ -65,6 +65,74 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
+Choose the least complex evaluator that can measure the requirement:
+
+1. Choose `ClassificationF1` for categorical enum fields measured across a
+   representative case set.
+2. Choose `FieldLevelJudge` when the Output contract identifies the values to
+   check and each field can have an explicit comparison rule.
+3. Add `ExpectedBehaviorJudge` when a case has a narrow execution requirement
+   that must be verified from its trace.
+4. Choose `VerifierAgent` when evaluation requires a multi-step investigation
+   across files, outputs, expected evidence, or traces.
+
+### Classification F1
+
+F1 is deterministic and aggregates precision and recall across the benchmark.
+Use it for intent, document type, routing, policy category, and similar enum
+outputs, especially when class frequencies are imbalanced. Each selected field
+needs an expected enum value in every relevant case.
+
+Do not use F1 for generated text, arbitrary extracted strings, continuous
+values, or explanations. It measures whether the category is correct, not why
+the Agent chose it or whether its execution was appropriate.
+
+### Field-level judge
+
+Use field-level evaluation when the structured Output contract makes failures
+decomposable. Select exact comparison for identifiers and other canonical
+values, containment for required content, semantic comparison for equivalent
+language, and array strategies for lists. Reserve a per-field LLM judge for a
+field whose correctness genuinely requires interpretation, and give that field
+specific instructions.
+
+This is preferable to holistic judging when it can express the contract: it is
+cheaper, easier to calibrate, and reveals exactly which output field regressed.
+
+### Expected Behavior Judge
+
+This is a focused preset, not a general-purpose judge. It inspects the case
+input, that case's Expected Behavior, and the submitted execution trace, then
+returns the fixed `behavior_compliance` metric. Use it for requirements such as
+calling a required tool, inspecting a complete input, validating before a side
+effect, ordering actions correctly, or retrying only under stated conditions.
+
+Do not add it merely because traces exist. If several execution paths are
+equally valid or only the final result matters, evaluate the outcome instead.
+Cases without a concrete execution requirement do not benefit from generic
+Expected Behavior prose.
+
+### Verifier Agent
+
+The Verifier Agent is an agent-as-judge for the most complex criteria. It does
+not make only one model judgement: it can take multiple investigation turns,
+use platform-provided read-only shell and image-inspection tools, open and
+search selected evidence, inspect generated artifacts and relevant trace
+details, and refine its assessment before returning metric scores.
+
+Use it when correctness requires combining evidence that a field comparison
+cannot capture—for example, checking a report against several source files,
+reviewing whether a generated artifact is complete and internally consistent,
+or judging overall task completion from both the output and execution trace.
+Give it one to eight non-overlapping metrics with observable instructions so
+qualities such as correctness, completeness, grounding, and usability remain
+separately diagnosable.
+
+It is the most flexible evaluator, but also the slowest and most expensive.
+Select only evidence relevant to its metrics and keep the investigation budget
+proportionate. Do not use it for labels, equality checks, or other rules that a
+deterministic evaluator can enforce more reliably.
+
 Practical rules:
 
 - Prefer deterministic field scoring where equality or containment really
@@ -80,6 +148,12 @@ Practical rules:
   equally valid.
 - Combine evaluators when they measure distinct dimensions. Avoid scoring the
   same property twice under different names.
+
+Useful combinations include deterministic field checks plus a Verifier Agent
+for a generated report, or Classification F1 plus Expected Behavior Judge when
+both the label and a mandatory tool workflow matter. Calibrate the complete
+plan with a known-good and deliberately weak variant before relying on its
+leaderboard ranking.
 
 Classification and field-level evaluator weights control their contribution to
 the combined score. Verifier metrics instead define their own weight (up to 10)
