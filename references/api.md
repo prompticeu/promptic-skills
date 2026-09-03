@@ -25,14 +25,17 @@ filter by them programmatically.
 ## Artifacts
 
 ```python
-promptic_sdk.artifact(value: str | bytes | os.PathLike[str], *, mime_type=None, api_key=None, endpoint=None) -> ArtifactReference
+promptic_sdk.artifact(value: str | bytes | os.PathLike[str], *, name=None, mime_type=None, api_key=None, endpoint=None) -> ArtifactReference
 ```
 
 Use `promptic_sdk.artifact(...)` when custom code needs to attach local files,
 bytes, or large text payloads to traces explicitly. The returned reference can be
 stored in a span attribute, for example `span.set_attribute("input_file",
-ref.ref)`. The SDK prefers direct object-storage upload via Promptic's presign
-API and only falls back to server-side base64 upload for compatibility.
+ref.ref)`. `name` is stored on the artifact and used as the default download
+filename; for local files it defaults to the file's base name, so pass it
+explicitly for bytes or text content, and read it back from `ref.name`. The SDK
+prefers direct object-storage upload via Promptic's presign API and only falls
+back to server-side base64 upload for compatibility.
 
 ## AI Application
 

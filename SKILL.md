@@ -116,6 +116,11 @@ file_ref = promptic_sdk.artifact("/tmp/report.pdf")
 span.set_attribute("retrieval.input_file", file_ref.ref)
 ```
 
+The artifact's `name` is used as the default download filename. It defaults to a
+local file's base name; pass `name=` to override it (or to set it for bytes or
+text content), for example `promptic_sdk.artifact(pdf_bytes, name="report.pdf")`,
+and read it back from `file_ref.name`.
+
 Use this helper for unsupported custom file payloads. External HTTP(S) URLs can
 remain as URLs.
 
