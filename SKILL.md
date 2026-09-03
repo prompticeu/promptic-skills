@@ -396,6 +396,19 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
+## Tool Optimization
+
+Distinct from prompt optimization, Promptic also optimizes the **tool descriptions** an LLM chooses between so the model picks the right tool for a query (task type `toolSelection`). It's a separate optimizer: the input is a set of tool definitions and representative queries, and each iteration returns optimized descriptions in `toolDescriptions` plus `selectionSystemPrompt` when system-prompt optimization is enabled.
+
+Tool definitions come either from an MCP server URL (with Bearer-token or OAuth 2.0 auth) that Promptic auto-discovers, or from a JSON array pasted directly into the wizard (Anthropic `input_schema`, OpenAI `{type, function}`, or plain `{name, description}` shapes are all normalized). A tool-optimization experiment can also attach an optional `systemPrompt` (used as fixed context during evaluation); when the **"Also optimize the system prompt"** toggle is on, the optimizer rewrites that system prompt alongside the tool descriptions. Read both results from the best iteration as `selectionSystemPrompt` and `toolDescriptions`.
+
+Create one programmatically with `create_tool_selection_experiment(ai_component_id, *, tools, test_cases, target_model=None, tool_source="manual", system_prompt=None, optimize_system_prompt=False, epochs=None, train_split_ratio=None, name=None, description=None)`. It atomically creates the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment — call `start_experiment(...)` to run it. `tools` is a list of `{"name", "description", "input_schema"?}` and `test_cases` a list of `{"query", "expected_tool"}` (use `""`, or a supported no-tool alias, as `expected_tool` for queries that should call no tool). `tool_source` is `"manual"` (definitions supplied directly) or `"mcp"`. This is a dedicated method, so `toolSelection` is not a `task_type` you pass to `create_experiment(...)` and its evaluator is not created via `create_evaluators(...)`. Auto-discovering tools from an MCP server URL is a dashboard flow; the SDK takes the tool definitions directly.
+
+Existing tool-optimization experiments, canonical dataset cases, evaluators,
+and iterations come back through the normal SDK methods. Use
+`get_iteration(...)` or `get_best_iteration(...)` to retrieve the optimized
+`toolDescriptions` and optional `selectionSystemPrompt`.
+
 ## CLI
 
 The `promptic` CLI mirrors the API client. All commands support `--json` for JSON output.
@@ -427,6 +440,7 @@ promptic components delete <id>     # Delete a component
 # Experiments
 promptic experiments list           # List experiments
 promptic experiments create         # Create experiment (interactive wizard)
+promptic experiments create-tool-selection --component-id <id> --tools tools.json --test-cases cases.json [--start]
 promptic experiments get <id>       # Get experiment details
 promptic experiments update <id>    # Update a pending experiment
 promptic experiments delete <id>    # Delete an experiment
@@ -442,7 +456,7 @@ promptic evaluators delete <exp-id> <eval-id>    # Delete an evaluator
 # Iterations
 promptic iterations list <exp-id>   # List iterations
 promptic iterations get <exp-id> <iter-id>  # Get iteration with scores
-promptic iterations best <exp-id>   # Get best-scoring iteration
+promptic iterations best <exp-id>   # Get best iteration, including tool-selection outputs
 
 # Deployments
 promptic deployments status <comp-id>            # Show active deployment
@@ -482,8 +496,8 @@ promptic evaluations get <eval-id> --component <id>     # Get results
 Enums (Literal types):
 - `ExperimentStatus`: `"pending" | "scheduled" | "running" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
-- `TaskType`: `"classification" | "textGeneration" | "structuredOutput"`
-- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput"`
+- `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` experiments are created with the dedicated `create_tool_selection_experiment(...)` method, **not** by passing a `task_type` to `create_experiment(...)`; the value is also surfaced by `get_experiment(...)` / `list_experiments(...)` for existing tool-selection / MCP-optimization experiments.
+- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"` — `"promptic"` is the legacy v1 value retained for historical experiments; use `"prompticV2"` for new ones.
 - `AgentEvaluatorType`: `"loop" | "tool_error" | "unused_tool" | "cost_hotspot" | "termination" | "efficiency" | "tool_selection_accuracy" | "plan_adherence" | "reasoning_coherence"` — surfaced in `Insight.type` (heuristic) or `LLMJudgeSummary.judgeName` (predefined judges)
 - `LLMJudgeRunStatus`: `"passed" | "issue" | "skipped" | "failed"`

@@ -75,6 +75,20 @@ client.create_experiment(
     hyperparameters=None,            # {"epochs": int, "trainSplitRatio": float, "numFewShots": int, "enableCot": bool}
     initial_prediction_model_schema=None,
 ) -> Experiment
+client.create_tool_selection_experiment(
+    ai_component_id: str,
+    *,
+    tools: list[dict],               # [{"name", "description", "input_schema"?}]
+    test_cases: list[dict],          # [{"query", "expected_tool"}]  ("" expected_tool = no tool)
+    target_model=None,               # omit to use the platform default
+    tool_source="manual",            # "manual" | "mcp"
+    system_prompt=None,
+    optimize_system_prompt=False,
+    epochs=None,
+    train_split_ratio=None,          # training fraction in [0.5, 0.9]
+    name=None,
+    description=None,
+) -> Experiment
 client.get_experiment(experiment_id: str) -> Experiment
 client.update_experiment(experiment_id: str, **updates) -> Experiment
 client.delete_experiment(experiment_id: str) -> None
@@ -94,6 +108,11 @@ resource.
 
 `start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the AI Application's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
+The platform also supports `toolSelection` for optimizing tool descriptions
+from MCP or manually supplied definitions. Do not pass it as `task_type` to
+`create_experiment(...)`; use `create_tool_selection_experiment(...)` instead.
+Returned experiments may include `systemPrompt` and `optimizeSystemPrompt`.
+
 ## Evaluators
 
 ```python
@@ -104,6 +123,8 @@ client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
 Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+
+Reading evaluators back via `list_evaluators(...)` for a tool-selection experiment also surfaces the `"toolSelection"` evaluator type, but it is not a value to pass into `create_evaluators(...)` — see `toolSelection` evaluator below.
 
 ### Judge evaluator configs
 
@@ -163,6 +184,22 @@ There is no evaluator-level `judge_instructions`; guidance lives on each judged 
 
 The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0` instead of ~`0.55`. Re-running older experiments may show lower scores on string-heavy schemas with unrelated content.
 
+### `toolSelection` evaluator
+
+The `toolSelection` evaluator is **attached automatically when a tool-selection experiment is created** (by `create_tool_selection_experiment(...)` or the dashboard) — it is not user-creatable via `create_evaluators(...)`. It is fixed to a `[0.0, 1.0]` scale, scores `1.0` when the predicted tool name matches `expected` (case-insensitive) and `0.0` otherwise, and takes no `config` keys.
+
+## Tool-selection optimization
+
+In addition to prompt optimization, Promptic can optimize the **tool descriptions** an LLM sees so a downstream model picks the right tool for a given query. Create these experiments with `create_tool_selection_experiment(...)`, which atomically provisions the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment; call `start_experiment(...)` to run it. The dashboard component-creation wizard offers the same flow and can auto-discover tools from an MCP server.
+
+- **Tools** (`tools`): a list of tool definitions, each `{"name", "description"}` with an optional `input_schema` (also accepted as `inputSchema`); at least one, tool names must be unique and cannot use a reserved no-tool alias. In the dashboard, definitions can also be imported from an MCP server URL (Bearer-token or OAuth 2.0 auth) or pasted as a JSON array; Anthropic-style (`{name, description, input_schema}`), OpenAI-function-calling-style (`{type, function: {name, description, parameters}}`), and plain (`{name, description}`) shapes are all normalized. `tool_source` records the provenance as `"manual"` (default) or `"mcp"`.
+- **Test cases** (`test_cases`): each is `{"query", "expected_tool"}` — the user query plus the supplied tool name that should fire. Use `""` as the canonical value for "no tool should be called". The API also accepts `"none"`, `"no tool"`, `"no-tool"`, `"no_tool"`, `"no tool call"`, `"no-tool-call"`, `"no_tool_call"`, `"no tools"`, `"no_tools"`, `"n/a"`, `"na"`, `"-"`, and `"__NO_TOOL__"`; all normalize to the same no-tool expectation. At least one case is required.
+- **Optional system prompt**: pass `system_prompt` to use as fixed context during evaluation. When `optimize_system_prompt=True`, the optimizer rewrites it alongside the tool descriptions. Read the best variant from `get_best_iteration(...)['selectionSystemPrompt']`; optimized descriptions are returned by the same iteration under `toolDescriptions`.
+- **Other options**: `target_model` (omit for the platform default), `epochs` (1–5), `train_split_ratio` (fraction assigned to training in `[0.5, 0.9]`; the remaining cases form the held-out evaluation split; omit to train and score on all cases), `name`, and `description`.
+
+Existing tool-selection experiments, dataset cases, iterations, and evaluators
+come back through the normal SDK methods with `taskType: "toolSelection"`.
+
 ## Iterations
 
 ```python
@@ -174,6 +211,12 @@ client.get_best_iteration(experiment_id: str) -> IterationWithScores
 Iterations report two scores: `overallNormalizedScore` (train split, used to guide the search) and `evalNormalizedScore` (held-out eval split, `None` when `trainSplitRatio` is not configured on the experiment). `get_best_iteration` ranks by `evalNormalizedScore` when available, otherwise by `overallNormalizedScore`.
 
 Iterations also expose `avgPredictionLatencyMs` — the mean wall-clock duration (milliseconds) of the target-model prediction calls in that iteration, averaged across train + eval predictions. It excludes retries, rate-limit backoff, and failed attempts, so it reflects real per-call response time. The key is **absent (or `None`)** on iterations completed before per-prediction latency tracking shipped, so use `.get("avgPredictionLatencyMs")` rather than direct subscript when handling legacy iterations. Useful for comparing two equally-scoring iterations on speed.
+
+Tool-selection iterations may additionally expose `toolDescriptions`, keyed by
+tool name, and `selectionSystemPrompt`, the system prompt used for that
+iteration. Both fields can be absent or `None` for historical iterations and
+other task types. `promptic iterations get` and `promptic iterations best`
+display these outputs; `--json` returns the complete response.
 
 ## Deployments
 
