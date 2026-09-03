@@ -25,14 +25,17 @@ filter by them programmatically.
 ## Artifacts
 
 ```python
-promptic_sdk.artifact(value: str | bytes | os.PathLike[str], *, mime_type=None, api_key=None, endpoint=None) -> ArtifactReference
+promptic_sdk.artifact(value: str | bytes | os.PathLike[str], *, name=None, mime_type=None, api_key=None, endpoint=None) -> ArtifactReference
 ```
 
 Use `promptic_sdk.artifact(...)` when custom code needs to attach local files,
 bytes, or large text payloads to traces explicitly. The returned reference can be
 stored in a span attribute, for example `span.set_attribute("input_file",
-ref.ref)`. The SDK prefers direct object-storage upload via Promptic's presign
-API and only falls back to server-side base64 upload for compatibility.
+ref.ref)`. `name` is stored on the artifact and used as the default download
+filename; for local files it defaults to the file's base name, so pass it
+explicitly for bytes or text content, and read it back from `ref.name`. The SDK
+prefers direct object-storage upload via Promptic's presign API and only falls
+back to server-side base64 upload for compatibility.
 
 ## AI Application
 
@@ -82,7 +85,7 @@ client.create_tool_selection_experiment(
     system_prompt=None,
     optimize_system_prompt=False,
     epochs=None,
-    train_split_ratio=None,          # held-out eval split in [0.5, 0.9]
+    train_split_ratio=None,          # training fraction in [0.5, 0.9]
     name=None,
     description=None,
 ) -> Experiment
@@ -98,22 +101,17 @@ client.duplicate_experiment(
 ) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
 
+Each `Experiment` exposes its `aiComponentId` and a dedicated `datasetId`.
+Training and eval data are supplied as dataset cases on that dataset (see
+[Datasets](#datasets)) — there is no separate experiment-scoped observation
+resource.
+
 `start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the AI Application's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
-The platform also supports a fourth task type, `toolSelection`, for tool-description optimization (MCP servers and hand-authored tool definitions). It is **not a valid `task_type` for `create_experiment`** — create these experiments with the dedicated `create_tool_selection_experiment(...)` method (see below), and treat `taskType: "toolSelection"` as a read-only value surfaced by `list_experiments(...)` / `get_experiment(...)` for existing ones. Such experiments also surface three optional fields on the `Experiment` record: `systemPrompt` (the fixed system prompt used as context during evaluation, may be `None`), `optimizeSystemPrompt` (boolean — whether the optimizer is also rewriting the system prompt), and `optimizedSystemPrompt` (the best system-prompt variant the optimizer settled on, populated only when the toggle was on).
-
-## Observations
-
-```python
-client.list_observations(experiment_id: str) -> ObservationList
-client.create_observations(experiment_id: str, observations: list[dict]) -> ObservationList
-client.update_observation(experiment_id: str, observation_id: int, **data) -> Observation
-client.delete_observation(experiment_id: str, observation_id: int) -> None
-```
-
-Observation dict format: `{"variables": dict[str, Any], "expected": str, "split": str (optional, default "eval")}`.
-
-For `toolSelection` experiments returned by the API, `variables` carries the user query (e.g. `{"input": "..."}`) and `expected` is the tool name that should be selected — or the empty string `""` when the query should not trigger any tool.
+The platform also supports `toolSelection` for optimizing tool descriptions
+from MCP or manually supplied definitions. Do not pass it as `task_type` to
+`create_experiment(...)`; use `create_tool_selection_experiment(...)` instead.
+Returned experiments may include `systemPrompt` and `optimizeSystemPrompt`.
 
 ## Evaluators
 
@@ -176,7 +174,7 @@ Supported `config` keys for the `structuredOutput` type:
 - `fields` (dict, optional): per-field overrides keyed by dotted JSON path. Each entry accepts:
   - `include` (bool, default `true`)
   - `weight` (float, default `1.0`)
-  - `strategy` (string): scalar comparison — `"exact" | "embedding" | "contains" | "judge"`. The `judge` value enables LLM-as-judge per-pair scoring on string fields and surfaces reasoning in the observation-details sheet.
+  - `strategy` (string): scalar comparison — `"exact" | "embedding" | "contains" | "judge"`. The `judge` value enables LLM-as-judge per-pair scoring on string fields and surfaces reasoning in the case-details sheet.
   - `array_strategy` (string): array aggregation — `"exact" | "similarity" | "judge"`. The `judge` value runs a single whole-array LLM call returning F1-compatible counts; arrays exceeding 50 items per side fall back to `similarity` with a warning marker.
   - `judge_instructions` (string, optional): field-specific guidance appended to the built-in *"do these convey the same essential information?"* rubric for this field only. Valid only when this field's `strategy` or `array_strategy` is `judge`; setting it on a non-judged field is rejected. Omit to use the built-in rubric on its own — selecting `judge` never requires instructions.
 
@@ -192,14 +190,15 @@ The `toolSelection` evaluator is **attached automatically when a tool-selection 
 
 ## Tool-selection optimization
 
-In addition to prompt optimization, Promptic can optimize the **tool descriptions** an LLM sees so a downstream model picks the right tool for a given query. Create these experiments with `create_tool_selection_experiment(...)`, which atomically provisions the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment; call `start_experiment(...)` to run it. The dashboard component-creation wizard offers the same flow, and is also where you auto-discover tools from an MCP server and review the optimized descriptions (which are not returned through the public API).
+In addition to prompt optimization, Promptic can optimize the **tool descriptions** an LLM sees so a downstream model picks the right tool for a given query. Create these experiments with `create_tool_selection_experiment(...)`, which atomically provisions the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment; call `start_experiment(...)` to run it. The dashboard component-creation wizard offers the same flow and can auto-discover tools from an MCP server.
 
 - **Tools** (`tools`): a list of tool definitions, each `{"name", "description"}` with an optional `input_schema` (also accepted as `inputSchema`); at least one, tool names must be unique and cannot use a reserved no-tool alias. In the dashboard, definitions can also be imported from an MCP server URL (Bearer-token or OAuth 2.0 auth) or pasted as a JSON array; Anthropic-style (`{name, description, input_schema}`), OpenAI-function-calling-style (`{type, function: {name, description, parameters}}`), and plain (`{name, description}`) shapes are all normalized. `tool_source` records the provenance as `"manual"` (default) or `"mcp"`.
-- **Test cases** (`test_cases`): each is `{"query", "expected_tool"}` — the user query plus the tool that should fire, or `""` (or a supported no-tool alias) for "no tool should be called". Each `expected_tool` must match one of the supplied tool names. At least one.
-- **Optional system prompt**: pass `system_prompt` to use as fixed context during evaluation. When `optimize_system_prompt=True`, the optimizer rewrites it alongside the tool descriptions and persists the best variant on the experiment as `optimizedSystemPrompt`.
-- **Other options**: `target_model` (omit for the platform default), `epochs` (1–5), `train_split_ratio` (held-out eval split in `[0.5, 0.9]`; omit to score on all cases), `name`, and `description`.
+- **Test cases** (`test_cases`): each is `{"query", "expected_tool"}` — the user query plus the supplied tool name that should fire. Use `""` as the canonical value for "no tool should be called". The API also accepts `"none"`, `"no tool"`, `"no-tool"`, `"no_tool"`, `"no tool call"`, `"no-tool-call"`, `"no_tool_call"`, `"no tools"`, `"no_tools"`, `"n/a"`, `"na"`, `"-"`, and `"__NO_TOOL__"`; all normalize to the same no-tool expectation. At least one case is required.
+- **Optional system prompt**: pass `system_prompt` to use as fixed context during evaluation. When `optimize_system_prompt=True`, the optimizer rewrites it alongside the tool descriptions. Read the best variant from `get_best_iteration(...)['selectionSystemPrompt']`; optimized descriptions are returned by the same iteration under `toolDescriptions`.
+- **Other options**: `target_model` (omit for the platform default), `epochs` (1–5), `train_split_ratio` (fraction assigned to training in `[0.5, 0.9]`; the remaining cases form the held-out evaluation split; omit to train and score on all cases), `name`, and `description`.
 
-Existing tool-selection experiments and their iterations / observations / evaluators also come back through the normal SDK methods with `taskType: "toolSelection"`.
+Existing tool-selection experiments, dataset cases, iterations, and evaluators
+come back through the normal SDK methods with `taskType: "toolSelection"`.
 
 ## Iterations
 
@@ -212,6 +211,12 @@ client.get_best_iteration(experiment_id: str) -> IterationWithScores
 Iterations report two scores: `overallNormalizedScore` (train split, used to guide the search) and `evalNormalizedScore` (held-out eval split, `None` when `trainSplitRatio` is not configured on the experiment). `get_best_iteration` ranks by `evalNormalizedScore` when available, otherwise by `overallNormalizedScore`.
 
 Iterations also expose `avgPredictionLatencyMs` — the mean wall-clock duration (milliseconds) of the target-model prediction calls in that iteration, averaged across train + eval predictions. It excludes retries, rate-limit backoff, and failed attempts, so it reflects real per-call response time. The key is **absent (or `None`)** on iterations completed before per-prediction latency tracking shipped, so use `.get("avgPredictionLatencyMs")` rather than direct subscript when handling legacy iterations. Useful for comparing two equally-scoring iterations on speed.
+
+Tool-selection iterations may additionally expose `toolDescriptions`, keyed by
+tool name, and `selectionSystemPrompt`, the system prompt used for that
+iteration. Both fields can be absent or `None` for historical iterations and
+other task types. `promptic iterations get` and `promptic iterations best`
+display these outputs; `--json` returns the complete response.
 
 ## Deployments
 
@@ -229,9 +234,30 @@ client.get_deployed_prompt(component_id: str) -> DeployedPrompt | None
 ```python
 client.create_dataset(component_id: str, name: str, *, description=None, trace_ids=None) -> Dataset
 client.list_datasets(component_id: str) -> DatasetList
-client.get_dataset(component_id: str, dataset_id: str) -> DatasetWithItems
+client.get_dataset(component_id: str, dataset_id: str) -> DatasetWithCases
 client.delete_dataset(component_id: str, dataset_id: str) -> None
 ```
+
+`Dataset` reports a `caseCount`; `DatasetWithCases` includes the full `cases` list.
+
+### Dataset cases
+
+Dataset cases are the canonical input/expected records used for both prompt
+optimization (an experiment's `datasetId`) and agent evaluation.
+
+```python
+client.list_dataset_cases(component_id: str, dataset_id: str) -> DatasetCaseList
+client.get_dataset_case(component_id: str, dataset_id: str, case_id: int) -> DatasetCase
+client.create_dataset_cases(component_id: str, dataset_id: str, cases: list[dict]) -> DatasetCaseList
+client.update_dataset_case(component_id: str, dataset_id: str, case_id: int, **updates) -> DatasetCase
+client.delete_dataset_case(component_id: str, dataset_id: str, case_id: int) -> None
+```
+
+`DatasetCase` create dict format: `{"inputPayload": dict[str, Any], "expectedPayload": Any (optional), "idx": int (optional), "split": str (optional, default "eval"), "metadata": dict (optional)}`.
+
+- `inputPayload` — the canonical input object (e.g. `{"message": "..."}`); its keys are the prompt variables.
+- `expectedPayload` — the expected output used by evaluators; omit for cases without a reference answer.
+- `split` — `"train"` or `"eval"`.
 
 ## Runs
 
@@ -264,4 +290,4 @@ client.wait_for_evaluation(component_id: str, evaluation_id: str, *, max_wait=30
 
 `create_evaluation` raises `PrompticAPIError` with status `402` under the same billing conditions as `start_experiment` (active subscription and payment method required, or free-tier limit) when the evaluation uses platform-managed judges.
 
-`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` (heuristic findings), `judgeResults` (per-judge results from predefined trajectory critics + custom rubrics), and `meta` (aggregate stats). See the example in `SKILL.md` for iteration patterns.
+`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` (heuristic findings), `judgeResults` (per-judge results from predefined trajectory critics + custom rubrics), and `meta` (aggregate stats). Judge results are keyed to concrete targets by `datasetCaseId`, `traceDbId`, or `runId`. See the example in `SKILL.md` for iteration patterns.

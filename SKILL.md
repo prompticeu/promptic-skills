@@ -116,6 +116,11 @@ file_ref = promptic_sdk.artifact("/tmp/report.pdf")
 span.set_attribute("retrieval.input_file", file_ref.ref)
 ```
 
+The artifact's `name` is used as the default download filename. It defaults to a
+local file's base name; pass `name=` to override it (or to set it for bytes or
+text content), for example `promptic_sdk.artifact(pdf_bytes, name="report.pdf")`,
+and read it back from `file_ref.name`.
+
 Use this helper for unsupported custom file payloads. External HTTP(S) URLs can
 remain as URLs.
 
@@ -138,23 +143,24 @@ with promptic_sdk.ai_component("customer-support-agent"):
     # All LLM calls here are attributed to this component
     ...
 
-# With dataset and run tagging for evaluation:
-with promptic_sdk.ai_component("my-agent", dataset="eval-set", run="v1-baseline"):
+# With dataset and run tagging for evaluation.
+# dataset_id is the UUID of an existing dataset (create it first via the API/CLI):
+with promptic_sdk.ai_component("my-agent", dataset_id="<dataset-uuid>", run="v1-baseline"):
     agent.run(test_input)
 ```
 
 Parameters:
 - `name` (str): AI Component name in the AI Application
-- `dataset` (str, optional): Dataset name — traces auto-added to this dataset (created if needed)
-- `run` (str, optional): Run name — groups traces within a dataset for comparison
+- `dataset_id` (str | UUID, optional): UUID of an existing dataset — traces are tagged with it and added to that dataset. The dataset must already exist; invalid UUIDs are rejected up front.
+- `run` (str, optional): Run name — groups traces within a dataset for comparison. Requires `dataset_id`.
 
 ### dataset context manager
 
-Tag spans with a dataset name independently:
+Tag spans with an existing dataset UUID independently:
 
 ```python
 with promptic_sdk.ai_component("my-agent"):
-    with promptic_sdk.dataset("eval-round-1"):
+    with promptic_sdk.dataset("<dataset-uuid>"):
         agent.run(test_input)
 ```
 
@@ -280,14 +286,20 @@ Evaluate agent performance using datasets, runs, and evaluations.
 
 ### Step 1: Run agent with tracing
 
-Instrument the agent with dataset and run tagging — traces are auto-collected:
+Instrument the agent with dataset and run tagging — traces are auto-collected.
+`dataset_id` must reference an existing dataset, so create one first (via
+`client.create_dataset(...)` or `promptic datasets create`) and reuse its id:
 
 ```python
 import promptic_sdk
+from promptic_sdk import PrompticClient
 
 promptic_sdk.init()
 
-with promptic_sdk.ai_component("my-agent", dataset="eval-set", run="v2-improved"):
+with PrompticClient() as client:
+    dataset = client.create_dataset("<component-id>", "eval-set")
+
+with promptic_sdk.ai_component("my-agent", dataset_id=dataset["id"], run="v2-improved"):
     for query in test_queries:
         agent.run(query)
 ```
@@ -361,10 +373,10 @@ with PrompticClient() as client:
         optimizer="prompticV2",      # or "miproV2", "bootstrapFewShot"
     )
 
-    # Add training observations
-    client.create_observations(exp["id"], [
-        {"variables": {"message": "Great product!"}, "expected": "positive"},
-        {"variables": {"message": "Terrible service"}, "expected": "negative"},
+    # Add training data as dataset cases on the experiment's dedicated dataset
+    client.create_dataset_cases(exp["aiComponentId"], exp["datasetId"], [
+        {"inputPayload": {"message": "Great product!"}, "expectedPayload": "positive"},
+        {"inputPayload": {"message": "Terrible service"}, "expectedPayload": "negative"},
     ])
 
     # Add evaluators
@@ -386,13 +398,16 @@ with PrompticClient() as client:
 
 ## Tool Optimization
 
-Distinct from prompt optimization, Promptic also optimizes the **tool descriptions** an LLM chooses between so the model picks the right tool for a query (task type `toolSelection`). It's a separate optimizer: the input is a set of tool definitions rather than a prompt dataset, and the output is optimized tool descriptions (plus an optional system prompt) rather than a deployable prompt.
+Distinct from prompt optimization, Promptic also optimizes the **tool descriptions** an LLM chooses between so the model picks the right tool for a query (task type `toolSelection`). It's a separate optimizer: the input is a set of tool definitions and representative queries, and each iteration returns optimized descriptions in `toolDescriptions` plus `selectionSystemPrompt` when system-prompt optimization is enabled.
 
-Tool definitions come either from an MCP server URL (with Bearer-token or OAuth 2.0 auth) that Promptic auto-discovers, or from a JSON array pasted directly into the wizard (Anthropic `input_schema`, OpenAI `{type, function}`, or plain `{name, description}` shapes are all normalized). A tool-optimization experiment can also attach an optional `systemPrompt` (used as fixed context during evaluation); when the **"Also optimize the system prompt"** toggle is on, the optimizer rewrites that system prompt alongside the tool descriptions and persists the best variant as `optimizedSystemPrompt` on the experiment record.
+Tool definitions come either from an MCP server URL (with Bearer-token or OAuth 2.0 auth) that Promptic auto-discovers, or from a JSON array pasted directly into the wizard (Anthropic `input_schema`, OpenAI `{type, function}`, or plain `{name, description}` shapes are all normalized). A tool-optimization experiment can also attach an optional `systemPrompt` (used as fixed context during evaluation); when the **"Also optimize the system prompt"** toggle is on, the optimizer rewrites that system prompt alongside the tool descriptions. Read both results from the best iteration as `selectionSystemPrompt` and `toolDescriptions`.
 
 Create one programmatically with `create_tool_selection_experiment(ai_component_id, *, tools, test_cases, target_model=None, tool_source="manual", system_prompt=None, optimize_system_prompt=False, epochs=None, train_split_ratio=None, name=None, description=None)`. It atomically creates the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment — call `start_experiment(...)` to run it. `tools` is a list of `{"name", "description", "input_schema"?}` and `test_cases` a list of `{"query", "expected_tool"}` (use `""`, or a supported no-tool alias, as `expected_tool` for queries that should call no tool). `tool_source` is `"manual"` (definitions supplied directly) or `"mcp"`. This is a dedicated method, so `toolSelection` is not a `task_type` you pass to `create_experiment(...)` and its evaluator is not created via `create_evaluators(...)`. Auto-discovering tools from an MCP server URL is a dashboard flow; the SDK takes the tool definitions directly.
 
-Existing tool-optimization experiments come back through the normal SDK methods with `taskType: "toolSelection"`. For these experiments `expected` holds the tool name that should fire (or `""` for "no tool should be called") and the query lives under `variables`.
+Existing tool-optimization experiments, canonical dataset cases, evaluators,
+and iterations come back through the normal SDK methods. Use
+`get_iteration(...)` or `get_best_iteration(...)` to retrieve the optimized
+`toolDescriptions` and optional `selectionSystemPrompt`.
 
 ## CLI
 
@@ -425,18 +440,13 @@ promptic components delete <id>     # Delete a component
 # Experiments
 promptic experiments list           # List experiments
 promptic experiments create         # Create experiment (interactive wizard)
+promptic experiments create-tool-selection --component-id <id> --tools tools.json --test-cases cases.json [--start]
 promptic experiments get <id>       # Get experiment details
 promptic experiments update <id>    # Update a pending experiment
 promptic experiments delete <id>    # Delete an experiment
 promptic experiments start <id>     # Start optimization
-promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (observations + evaluators)
+promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (dataset cases + evaluators)
 promptic experiments continue <id> [--start]                 # Clone, seed initial prompt from source's best iteration
-
-# Observations (training data)
-promptic observations list <exp-id>              # List observations
-promptic observations add <exp-id> --from-file f # Bulk import (CSV/JSONL/JSON)
-promptic observations add <exp-id> -i "..." -e "..." # Add single observation
-promptic observations delete <exp-id> <obs-id>   # Delete an observation
 
 # Evaluators
 promptic evaluators list <exp-id>                # List evaluators
@@ -446,7 +456,7 @@ promptic evaluators delete <exp-id> <eval-id>    # Delete an evaluator
 # Iterations
 promptic iterations list <exp-id>   # List iterations
 promptic iterations get <exp-id> <iter-id>  # Get iteration with scores
-promptic iterations best <exp-id>   # Get best-scoring iteration
+promptic iterations best <exp-id>   # Get best iteration, including tool-selection outputs
 
 # Deployments
 promptic deployments status <comp-id>            # Show active deployment
@@ -457,8 +467,11 @@ promptic deployments undeploy <comp-id>          # Remove deployment
 # Datasets
 promptic datasets create --component <id> --name <n>  # Create dataset
 promptic datasets list --component <id>          # List datasets
-promptic datasets get <ds-id> --component <id>   # Get dataset with items
+promptic datasets get <ds-id> --component <id>   # Get dataset with its cases
 promptic datasets delete <ds-id> --component <id>  # Delete dataset
+# Individual dataset cases (training/eval data) are managed through the Python
+# client (create_dataset_cases / update_dataset_case / delete_dataset_case) or
+# the dataset-case REST endpoints, not a dedicated CLI command.
 
 # Runs
 promptic runs create --component <id> --dataset <ds-id>  # Create run
