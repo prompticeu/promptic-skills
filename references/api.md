@@ -155,11 +155,15 @@ AgentGymCaseResult.failed(
 `variant_id`, and `status`. `status["run"]` includes scoring and eligibility
 state when a leaderboard run exists.
 
-Verifier authoring uses `VerifierMetric(key, name, instructions)`,
-`MetricBinding(weight=1, threshold=None)`, `EvidencePolicy`, and
-`InvestigationBudget(max_steps=20)`. Verifier metrics aggregate independently,
-so `VerifierAgent` has no evaluator-level weight. `ExpectedBehaviorJudge`
-accepts an optional model and a `behavior_compliance` metric binding.
+Verifier authoring uses
+`VerifierMetric(key, name, instructions, weight=1, threshold=None)`,
+`EvidencePolicy`, and `InvestigationBudget(max_steps=20)`. The SDK translates
+inline metric scoring into the API's separate binding map. Verifier metrics
+aggregate independently, so `VerifierAgent` has no evaluator-level weight.
+The lower-level `MetricBinding` mapping remains available for compatibility but
+must not configure a metric that already has non-default inline scoring.
+`ExpectedBehaviorJudge` accepts an optional model and a `behavior_compliance`
+metric binding.
 
 Result inspection and recovery:
 

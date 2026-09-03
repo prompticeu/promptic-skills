@@ -62,7 +62,7 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
 | `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with `exact`, `contains`, `embedding`, or `judge`; configure arrays with `exact`, `similarity`, or `judge`. Add field-specific judge instructions only for judged fields. |
-| `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics, instructions for each metric, selected evidence, optional per-metric bindings, and an investigation budget. |
+| `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
 Practical rules:
@@ -82,8 +82,9 @@ Practical rules:
   same property twice under different names.
 
 Classification and field-level evaluator weights control their contribution to
-the combined score. Verifier metrics instead have independent bindings: each
-binding may set a weight up to 10 and an optional normalized threshold.
+the combined score. Verifier metrics instead define their own weight (up to 10)
+and optional normalized threshold directly on `VerifierMetric`; the SDK creates
+the platform binding internally.
 Verifier evaluators do not have an overall weight. Leave
 thresholds unset until there is a defensible acceptance boundary; do not choose
 one from gut feeling. Calibrate evaluators against a small set of manually
@@ -138,7 +139,6 @@ from promptic_sdk import (
     BenchmarkFile,
     EvidenceKind,
     EvidencePolicy,
-    MetricBinding,
     VerifierAgent,
     VerifierMetric,
 )
@@ -174,6 +174,8 @@ with AgentGymClient() as gym:
                         "correctness",
                         "Correctness",
                         "Check extracted values against the document.",
+                        weight=2,
+                        threshold=0.8,
                     ),
                     VerifierMetric(
                         "report_quality",
@@ -181,10 +183,6 @@ with AgentGymClient() as gym:
                         "Check that the report explains and cites ambiguities.",
                     ),
                 ),
-                metric_bindings={
-                    "correctness": MetricBinding(weight=2),
-                    "report_quality": MetricBinding(weight=1),
-                },
                 evidence=EvidencePolicy(
                     selected=(
                         EvidenceKind.CASE_INPUT,
