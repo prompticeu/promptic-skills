@@ -24,6 +24,10 @@ Use `"x-promptic-type": "file"` on a schema field containing files. Declare a
 generated artifact in the Output schema and return it with the same field path;
 do not treat output files as unrelated attachments.
 
+Across input and expected output, each case supports at most 10 files. Each file
+may be at most 25,000,000 bytes, and their combined size may be at most
+100,000,000 bytes. Validate these limits before uploading or importing cases.
+
 Only add an Output schema when the result has a meaningful stable structure.
 Do not invent fields merely to make a subjective task look deterministic.
 
