@@ -1,11 +1,12 @@
 ---
 name: promptic
-description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, and agent evaluation. Use when code imports `promptic_sdk`, user asks to add Promptic tracing, optimize prompts, evaluate agents, deploy prompts, or integrate with the Promptic platform. Also use when setting up OpenTelemetry-based LLM tracing, architecture tracing, workflow tracing, semantic parent/child spans, evaluation datasets, or managing AI components programmatically.
+description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, datasets, and Agent Optimization. Use when code imports `promptic_sdk`; when the user asks to trace, optimize, benchmark, or deploy an agent or prompt; or when running an agent externally and submitting predictions, files, or traces for scoring. Also use for OpenTelemetry-based LLM, architecture, workflow, and semantic parent/child tracing, canonical datasets, or programmatic AI Component management.
 ---
 
 # Promptic Python SDK
 
-SDK and CLI for the [Promptic](https://promptic.eu) platform — LLM tracing, prompt optimization, and agent evaluation.
+SDK and CLI for the [Promptic](https://promptic.eu) platform — LLM tracing,
+prompt optimization, and Agent Optimization.
 
 ## Installation
 
@@ -246,15 +247,14 @@ RequestsInstrumentor().instrument()  # Spans exported to Promptic
 `opentelemetry-instrumentation-langchain` (≥0.60), which covers LangChain
 chains, LangGraph (`create_agent`), and deepagents with subagents. Emits the
 official OpenTelemetry GenAI semantic conventions (`gen_ai.tool.definitions`,
-`gen_ai.operation.name`, `gen_ai.usage.*`), so agent-evaluation insights
-(loops, tool errors, unused tools) work for flat agents and multi-agent
+`gen_ai.operation.name`, `gen_ai.usage.*`) for flat agents and multi-agent
 graphs uniformly.
 
 Users who prefer the LangSmith OTel bridge (e.g. for hybrid dual-export to
 LangSmith) can opt in by setting `LANGSMITH_TRACING=true` and
 `LANGSMITH_OTEL_ENABLED=true` before calling `init()`. Note: the LangSmith
-bridge does not emit tool definitions, so the "unused tools" insight will
-not fire on LangSmith-bridged traces.
+bridge does not emit tool definitions, so tool metadata may be incomplete on
+LangSmith-bridged traces.
 
 ## API Client
 
@@ -280,81 +280,38 @@ Constructor args: `api_key`, `access_token`, `ai_application_id`, `endpoint`, `t
 
 For detailed method signatures and parameters, see [references/api.md](references/api.md).
 
-## Agent Evaluation Workflow
+## Agent Optimization: external submissions
 
-Evaluate agent performance using datasets, runs, and evaluations.
+Use `AgentGymClient.run_and_submit(...)` or `promptic agent-gym run` when a
+complete Agent runs outside Promptic. Promptic supplies one immutable benchmark
+version; the trusted runner executes every case and progressively persists its
+predictions, generated files, and optional traces before requesting scoring.
 
-### Step 1: Run agent with tracing
+Choose the workflow before writing code:
 
-Instrument the agent with dataset and run tagging — traces are auto-collected.
-`dataset_id` must reference an existing dataset, so create one first (via
-`client.create_dataset(...)` or `promptic datasets create`) and reuse its id:
+1. **Existing benchmark:** authenticate → pull the published dataset → inspect
+   the public contract and inputs → implement → run and submit → inspect and
+   compare → iterate.
+2. **New benchmark:** author the contract, cases, and evaluators → review and
+   publish → calibrate with a baseline → begin variant iteration.
+3. **Changed benchmark:** inspect and resolve the draft → publish → re-evaluate
+   existing predictions for evaluator-only changes, or rerun variants when the
+   execution contract changed.
+4. **Isolated execution:** use a trusted coordinator and resumable session →
+   materialize inputs → persist predictions → finalize → wait or recover.
 
-```python
-import promptic_sdk
-from promptic_sdk import PrompticClient
-
-promptic_sdk.init()
-
-with PrompticClient() as client:
-    dataset = client.create_dataset("<component-id>", "eval-set")
-
-with promptic_sdk.ai_component("my-agent", dataset_id=dataset["id"], run="v2-improved"):
-    for query in test_queries:
-        agent.run(query)
-```
-
-### Step 2: Trigger evaluation
-
-**Option A — CLI (recommended for agentic workflows):**
-
-```bash
-# Find the component and dataset IDs
-promptic components list --json
-promptic datasets list --component <comp-id> --json
-promptic runs list --component <comp-id> --json
-
-# Run evaluation (waits for completion by default)
-promptic evaluations run <comp-id> --dataset <ds-id> --run <run-id> --name "v2-eval"
-
-# Or don't wait and check later
-promptic evaluations run <comp-id> --dataset <ds-id> --run <run-id> --no-wait
-promptic evaluations get <eval-id> --component <comp-id>
-```
-
-**Option B — Python API:**
-
-```python
-from promptic_sdk import PrompticClient
-
-with PrompticClient() as client:
-    components = client.list_components()
-    comp_id = components["data"][0]["id"]
-
-    datasets = client.list_datasets(comp_id)
-    ds_id = datasets["data"][0]["id"]
-
-    evaluation = client.create_evaluation(comp_id, ds_id, name="v2-eval")
-    result = client.wait_for_evaluation(comp_id, evaluation["id"])
-
-    # Heuristic insights (loop, tool_error, unused_tool, cost_hotspot, termination)
-    for insight in result["results"]["insights"]:
-        print(f"[{insight['severity']}] {insight['title']}: {insight['description']}")
-
-    # LLM-judge results (predefined trajectory critics + custom rubrics)
-    for summary in result["results"].get("judgeResults", []):
-        print(f"{summary['judgeName']}: "
-              f"{len(summary['failedRunIds'])}/{summary['totalRuns']} flagged")
-        for run in summary["results"]:
-            score = run.get("value")  # None when status="skipped" or for verdict-only custom rubrics
-            print(f"  {run['runId']}: {run['status']} score={score}")
-```
-
-The four predefined trajectory critics (`efficiency`, `tool_selection_accuracy`,
-`plan_adherence`, `reasoning_coherence`) flow through `judgeResults[]`, not
-`insights[]`. Any judge can return `status="skipped"` with `value=None` when
-the trace lacks the structural prerequisites for that judge — inspect
-`metadata.reason` for the cause.
+When the task includes creating or revising the benchmark, first read
+[references/agent-benchmark.md](references/agent-benchmark.md). It explains the
+Agent contract, representative cases, expected behavior, evaluator selection,
+evaluator configuration, immutable versions, re-evaluation, and when variants
+must be resubmitted. Then read
+[references/agent-gym.md](references/agent-gym.md) for the trust boundary,
+existing-benchmark discovery, callback contract, resumable sessions, durable
+uploads, scoring submission, result inspection, comparison, and recovery. For
+exact public signatures, also read the Agent Optimization section of
+[references/api.md](references/api.md).
+Do not add or describe Auto Engineer or autonomous optimization loops; they are
+not part of this workflow.
 
 ## Prompt Optimization Workflow
 
@@ -419,6 +376,16 @@ promptic login                      # Browser auth (device flow)
 promptic logout                     # Clear saved credentials
 promptic configure                  # Save API key & endpoint (CI/CD)
 
+# Agent Optimization
+promptic agent-gym status <benchmark-id>
+promptic agent-gym dataset-pull <benchmark-id> -o ./benchmark-inputs
+promptic agent-gym apply agent.json
+promptic agent-gym run <benchmark-id> my_agent:run \
+  --name my-agent --version 1.0.0 --architecture architecture.md
+promptic agent-gym results <benchmark-id> <run-id>
+promptic agent-gym compare-runs <benchmark-id> <baseline-run-id> <candidate-run-id>
+promptic agent-gym reevaluate <benchmark-id> <run-id>
+
 # AI Application
 promptic ai-application info         # Show current AI Application details
 promptic ai-application list         # List accessible AI Applications
@@ -473,22 +440,6 @@ promptic datasets delete <ds-id> --component <id>  # Delete dataset
 # client (create_dataset_cases / update_dataset_case / delete_dataset_case) or
 # the dataset-case REST endpoints, not a dedicated CLI command.
 
-# Runs
-promptic runs create --component <id> --dataset <ds-id>  # Create run
-promptic runs list --component <id>              # List runs
-promptic runs get <run-id> --component <id>      # Get run with traces
-promptic runs delete <run-id> --component <id>   # Delete run
-
-# Annotations
-promptic annotations create --component <id> --run <r> --trace <t>  # Annotate trace
-promptic annotations list --component <id> --run <r>    # List by run
-promptic annotations list --component <id> --dataset <d>  # List by dataset
-promptic annotations delete <ann-id> --component <id> --run <r>  # Delete
-
-# Evaluations
-promptic evaluations run <comp-id> --dataset <ds-id> --run <run-id>  # Run evaluation (--run required)
-promptic evaluations list --component <id>       # List evaluations
-promptic evaluations get <eval-id> --component <id>     # Get results
 ```
 
 ## Key Types
@@ -499,5 +450,3 @@ Enums (Literal types):
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` experiments are created with the dedicated `create_tool_selection_experiment(...)` method, **not** by passing a `task_type` to `create_experiment(...)`; the value is also surfaced by `get_experiment(...)` / `list_experiments(...)` for existing tool-selection / MCP-optimization experiments.
 - `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"` — `"promptic"` is the legacy v1 value retained for historical experiments; use `"prompticV2"` for new ones.
-- `AgentEvaluatorType`: `"loop" | "tool_error" | "unused_tool" | "cost_hotspot" | "termination" | "efficiency" | "tool_selection_accuracy" | "plan_adherence" | "reasoning_coherence"` — surfaced in `Insight.type` (heuristic) or `LLMJudgeSummary.judgeName` (predefined judges)
-- `LLMJudgeRunStatus`: `"passed" | "issue" | "skipped" | "failed"`

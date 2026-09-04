@@ -37,6 +37,157 @@ explicitly for bytes or text content, and read it back from `ref.name`. The SDK
 prefers direct object-storage upload via Promptic's presign API and only falls
 back to server-side base64 upload for compatibility.
 
+## Agent Optimization
+
+The user-facing feature is Agent Optimization. The Python SDK retains the
+`AgentGymClient` name and the CLI uses the `agent-gym` command group.
+
+```python
+AgentGymClient(
+    endpoint: str | None = None,
+    timeout: float = 30.0,
+    api_key: str | None = None,
+    access_token: str | None = None,
+    ai_application_id: str | None = None,
+)
+
+client.download_dataset(
+    benchmark_id: str,
+    destination: str | os.PathLike[str],
+    *,
+    revision_id: str | None = None,
+    page_size: int = 100,
+    overwrite: bool = False,
+) -> DownloadedBenchmarkDataset
+
+client.run_and_submit(
+    benchmark_id: str,
+    executor: Candidate,
+    *,
+    name: str,
+    version: str,
+    architecture_description: str,
+    repository_url=None,
+    commit_hash=None,
+    revision_id=None,
+    variant_identity=None,
+    metadata=None,
+    workdir=None,
+    idempotency_key=None,
+    capture_exceptions=True,
+    wait=True,
+    max_wait=600,
+    poll_interval=2,
+    trace_max_wait=30,
+    trace_poll_interval=0.5,
+    trace_cases=False,
+    trace_policy="best_effort",
+    input_model=None,
+) -> AgentGymRunResult
+```
+
+`AsyncAgentGymClient.run_and_submit(...)` has the same arguments and awaits an
+async or synchronous candidate callback.
+
+Resumable sessions:
+
+```python
+session = client.start_submission(
+    benchmark_id,
+    *,
+    idempotency_key: str,
+    variant_identity: VariantIdentity,
+    revision_id=None,
+    ttl_seconds=86400,
+)
+session.get_manifest(page_size=100)
+session.materialize_manifest(destination)
+session.add_prediction(case_id, result)
+session.finalize(*, idempotency_key, metadata=None, trace_policy="best_effort")
+session.status()
+session.wait(max_wait=600, poll_interval=2)
+session.cancel()
+session.retry_scoring()
+
+client.resume_submission(benchmark_id, submission_id)
+```
+
+`add_prediction(...)` uploads and persists the case result immediately.
+`finalize(...)` verifies exact frozen-case coverage, closes prediction writes,
+and requests scoring. Lower-level `upload_predictions(...)` accepts 1-500
+predictions and safely replaces included cases while the session remains open.
+
+Candidate inputs and results:
+
+```python
+AgentGymCase(
+    id: int,
+    ordinal: int,
+    input: dict[str, Any],
+    task: dict[str, Any],
+)
+
+AgentGymOutputArtifact(
+    source: pathlib.Path,
+    field_path: str,
+    path: str | None = None,
+    mime_type: str | None = None,
+    role: str = "output",
+)
+
+AgentGymCaseResult.succeeded(value, *, artifacts=(), raw_trace_ids=())
+AgentGymCaseResult.artifact(
+    *artifacts,
+    output=None,
+    raw_trace_ids=(),
+)
+AgentGymCaseResult.failed(
+    *,
+    error_code: str,
+    error: str,
+    error_category=None,
+    retryable=False,
+    diagnostics=None,
+)
+```
+
+`AgentGymRunResult` fields: `submission_id`, `revision_id`, `run_id`,
+`variant_id`, and `status`. `status["run"]` includes scoring and eligibility
+state when a leaderboard run exists.
+
+Verifier authoring uses
+`VerifierMetric(key, name, instructions, weight=1, threshold=None)`,
+`EvidencePolicy`, and `InvestigationBudget(max_steps=20)`. The SDK translates
+inline metric scoring into the API's separate binding map. Verifier metrics
+aggregate independently, so `VerifierAgent` has no evaluator-level weight.
+The lower-level `MetricBinding` mapping remains available for compatibility but
+must not configure a metric that already has non-default inline scoring.
+`ExpectedBehaviorJudge` accepts an optional model and a `behavior_compliance`
+metric binding.
+
+Result inspection and recovery:
+
+```python
+client.get_run_results(benchmark_id, run_id)
+client.list_case_results(benchmark_id, run_id, *, sort="score", limit=100, cursor=None)
+client.iter_case_results(benchmark_id, run_id, *, page_size=100, sort="score")
+client.get_case_result(benchmark_id, run_id, case_id)
+client.download_prediction_artifact(artifact, destination, *, overwrite=False)
+client.compare_runs(benchmark_id, *, parent_run_id, candidate_run_id)
+client.get_submission_status(benchmark_id, submission_id)
+client.wait_for_submission(benchmark_id, submission_id, *, max_wait=600, poll_interval=2)
+client.retry_scoring(benchmark_id, run_id)
+client.cancel_submission(benchmark_id, submission_id)
+```
+
+`get_run_results()` includes `score_status_counts`. Verifier evaluator results
+include `source_evaluator_id` and `metric_key`; per-field result maps declare
+their `mean_per_field_scores_basis` as `succeeded_only`.
+
+Use `references/agent-gym.md` for the executable workflow and trust boundary.
+Use the session API when the trusted runner must isolate untrusted execution,
+resume after a restart, or control protocol steps directly.
+
 ## AI Application
 
 ```python
@@ -236,58 +387,11 @@ client.create_dataset(component_id: str, name: str, *, description=None, trace_i
 client.list_datasets(component_id: str) -> DatasetList
 client.get_dataset(component_id: str, dataset_id: str) -> DatasetWithCases
 client.delete_dataset(component_id: str, dataset_id: str) -> None
-```
-
-`Dataset` reports a `caseCount`; `DatasetWithCases` includes the full `cases` list.
-
-### Dataset cases
-
-Dataset cases are the canonical input/expected records used for both prompt
-optimization (an experiment's `datasetId`) and agent evaluation.
-
-```python
 client.list_dataset_cases(component_id: str, dataset_id: str) -> DatasetCaseList
+client.create_dataset_cases(component_id: str, dataset_id: str, cases: DatasetCaseInput | list[DatasetCaseInput]) -> DatasetCaseList
 client.get_dataset_case(component_id: str, dataset_id: str, case_id: int) -> DatasetCase
-client.create_dataset_cases(component_id: str, dataset_id: str, cases: list[dict]) -> DatasetCaseList
-client.update_dataset_case(component_id: str, dataset_id: str, case_id: int, **updates) -> DatasetCase
+client.update_dataset_case(component_id: str, dataset_id: str, case_id: int, updates: DatasetCaseInput) -> DatasetCase
 client.delete_dataset_case(component_id: str, dataset_id: str, case_id: int) -> None
 ```
 
-`DatasetCase` create dict format: `{"inputPayload": dict[str, Any], "expectedPayload": Any (optional), "idx": int (optional), "split": str (optional, default "eval"), "metadata": dict (optional)}`.
-
-- `inputPayload` — the canonical input object (e.g. `{"message": "..."}`); its keys are the prompt variables.
-- `expectedPayload` — the expected output used by evaluators; omit for cases without a reference answer.
-- `split` — `"train"` or `"eval"`.
-
-## Runs
-
-```python
-client.create_run(component_id: str, dataset_id: str, *, name=None, trace_ids=None) -> Run
-client.list_runs(component_id: str) -> RunList
-client.get_run(component_id: str, run_id: str) -> RunWithTraces
-client.delete_run(component_id: str, run_id: str) -> None
-```
-
-## Annotations
-
-```python
-client.upsert_annotation(component_id: str, run_id: str, trace_db_id: str, *, rating=None, comment=None) -> Annotation
-client.list_annotations(component_id: str, run_id: str) -> AnnotationList
-client.list_dataset_annotations(component_id: str, dataset_id: str) -> AnnotationList
-client.delete_annotation(component_id: str, run_id: str, annotation_id: str) -> None
-```
-
-- `rating`: `"positive"` or `"negative"`
-
-## Agent Evaluations
-
-```python
-client.create_evaluation(component_id: str, dataset_id: str, *, name=None, run_id=None) -> AgentEvaluation
-client.list_evaluations(component_id: str) -> AgentEvaluationList
-client.get_evaluation(component_id: str, evaluation_id: str) -> AgentEvaluation
-client.wait_for_evaluation(component_id: str, evaluation_id: str, *, max_wait=300, poll_interval=2) -> AgentEvaluation
-```
-
-`create_evaluation` raises `PrompticAPIError` with status `402` under the same billing conditions as `start_experiment` (active subscription and payment method required, or free-tier limit) when the evaluation uses platform-managed judges.
-
-`AgentEvaluation` status: `"pending" | "running" | "completed" | "failed"`. The `results` field contains `InsightResult` with `insights` (heuristic findings), `judgeResults` (per-judge results from predefined trajectory critics + custom rubrics), and `meta` (aggregate stats). Judge results are keyed to concrete targets by `datasetCaseId`, `traceDbId`, or `runId`. See the example in `SKILL.md` for iteration patterns.
+`Dataset` reports a `caseCount`; `DatasetWithCases` includes the full `cases` list.
