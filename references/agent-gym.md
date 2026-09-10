@@ -330,14 +330,16 @@ promptic agent-gym retry-scoring "$BENCHMARK_ID" "$RUN_ID"
 promptic agent-gym submission-cancel "$BENCHMARK_ID" "$SUBMISSION_ID" --yes
 ```
 
-- Retry scoring only after a recoverable scoring-dispatch failure
-  (`dispatch_failed`), which means scoring could not be queued. It reuses the
-  existing immutable predictions and does not rerun the Agent or create a
-  replacement leaderboard entry.
+- Retry scoring when a run does not reach a scored state on its own — a
+  `dispatch_failed` submission (scoring could not be queued) or a run that
+  failed with a billing or authorization error (retry after correcting
+  billing). It reuses the existing immutable predictions and does not rerun the
+  Agent or create a replacement leaderboard entry.
 - A scoring or manual re-evaluation attempt that is interrupted after it starts
-  running recovers on its own: it resumes and completes exactly once, reusing
-  already-computed scores without repeating model calls or charges, so retry
-  scoring is unnecessary in that case.
+  running recovers on its own: it is retried a bounded number of times and
+  reuses the scores already recorded for the run, so recorded work is not
+  re-scored or billed again; work not yet recorded when interrupted may be
+  recomputed.
 - Rerunning the Agent creates a new empty submission session.
 - Cancel only an unsubmitted session that should accept no more predictions.
 - If required evaluator evidence is missing or evaluation fails, inspect the
