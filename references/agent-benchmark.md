@@ -340,10 +340,11 @@ When execution inputs changed, create a new submission against the active
 version and execute every frozen case again. The prior run remains useful as
 history, but it should not be treated as current for the new benchmark version.
 
-`retry-scoring` is not re-evaluation. Use it only to recover a failed scoring
-dispatch for the same predictions and evaluation plan. Use `reevaluate` after
-an evaluator-only version change, and resubmit after an execution-affecting
-change.
+`retry-scoring` is not re-evaluation. Use it to recover scoring for the same
+predictions and evaluation plan when a run does not reach a scored state on its
+own — a failed scoring dispatch, or a run that failed with a billing or
+authorization error (retry after correcting billing). Use `reevaluate` after an
+evaluator-only version change, and resubmit after an execution-affecting change.
 
 Only compare or rank runs whose execution and evaluation versions are
 compatible. If a benchmark change intentionally changes what success means,
