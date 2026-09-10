@@ -257,7 +257,7 @@ Training and eval data are supplied as dataset cases on that dataset (see
 [Datasets](#datasets)) — there is no separate experiment-scoped observation
 resource.
 
-`start_experiment` raises `PrompticAPIError` with status `402` when platform billing is enabled and the AI Application's organization has no active subscription and payment method, or is blocked by the free-tier limit.
+`start_experiment` accepts experiments that are `pending` or `failed`; starting a `failed` experiment re-runs it. Starting an experiment in any other state raises `PrompticAPIError` with status `409`. It raises `PrompticAPIError` with status `402` when platform billing is enabled and the AI Application's organization has no active subscription and payment method, or is blocked by the free-tier limit.
 
 The platform also supports `toolSelection` for optimizing tool descriptions
 from MCP or manually supplied definitions. Do not pass it as `task_type` to
