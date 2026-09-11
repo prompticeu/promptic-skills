@@ -221,7 +221,8 @@ client.create_experiment(
     initial_prompt=None,
     name=None,
     description=None,
-    provider="openai",               # "openai" | "openrouter" | "custom" | "google"
+    provider="openai",               # "openai" | "openrouter" | "custom" | "google" | "platform"
+                                     # platform: pass the managed model id as target_model, keep optimizer="prompticV2", requires usage billing
     optimizer="prompticV2",          # "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"
     hyperparameters=None,            # {"epochs": int, "trainSplitRatio": float, "numFewShots": int, "enableCot": bool}
     initial_prediction_model_schema=None,
