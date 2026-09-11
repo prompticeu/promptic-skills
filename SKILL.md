@@ -446,7 +446,7 @@ promptic datasets delete <ds-id> --component <id>  # Delete dataset
 
 Enums (Literal types):
 - `ExperimentStatus`: `"pending" | "scheduled" | "running" | "completed" | "failed"`
-- `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
+- `ModelProvider`: `"openai" | "openrouter" | "custom" | "google" | "platform"` — use `"platform"` to run against a Promptic-managed (Platform) model; pass the managed model's id as `target_model`, keep the default `prompticV2` optimizer (the others reject Platform Models), and note the organization needs usage billing enabled.
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` experiments are created with the dedicated `create_tool_selection_experiment(...)` method, **not** by passing a `task_type` to `create_experiment(...)`; the value is also surfaced by `get_experiment(...)` / `list_experiments(...)` for existing tool-selection / MCP-optimization experiments.
 - `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"` — `"promptic"` is the legacy v1 value retained for historical experiments; use `"prompticV2"` for new ones.
