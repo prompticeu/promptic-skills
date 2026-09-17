@@ -336,6 +336,12 @@ The Python equivalent is `gym.reevaluate_run(benchmark_id, run_id)`. It creates
 a new immutable evaluation operation over the existing predictions. It does
 not create a new Agent execution.
 
+A re-evaluation that is interrupted while it is running recovers on its own
+instead of staying stuck: the run fails with a retryable message, the stored
+predictions and already-recorded scores are preserved, and any billing hold for
+the interrupted attempt is released. Run `reevaluate` (or `reevaluate_run()`)
+again to retry.
+
 When execution inputs changed, create a new submission against the active
 version and execute every frozen case again. The prior run remains useful as
 history, but it should not be treated as current for the new benchmark version.
