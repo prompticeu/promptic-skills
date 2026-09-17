@@ -182,7 +182,12 @@ client.cancel_submission(benchmark_id, submission_id)
 
 `get_run_results()` includes `score_status_counts`. Verifier evaluator results
 include `source_evaluator_id` and `metric_key`; per-field result maps declare
-their `mean_per_field_scores_basis` as `succeeded_only`.
+their `mean_per_field_scores_basis` as `succeeded_only`. When scoring fails,
+`get_run_results()` also returns a `failure` object with a stable `code` (for
+example, `verifier_tool_call_budget`) and a readable `message`. The same summary
+appears as `run_failure` on case-result responses and `run["failure"]` on
+`get_submission_status()`; none of these fields carry raw provider or verifier
+exception text.
 
 Use `references/agent-gym.md` for the executable workflow and trust boundary.
 Use the session API when the trusted runner must isolate untrusted execution,
