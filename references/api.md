@@ -162,8 +162,10 @@ inline metric scoring into the API's separate binding map. Verifier metrics
 aggregate independently, so `VerifierAgent` has no evaluator-level weight.
 The lower-level `MetricBinding` mapping remains available for compatibility but
 must not configure a metric that already has non-default inline scoring.
-`ExpectedBehaviorJudge` accepts an optional model and a `behavior_compliance`
-metric binding.
+`FieldLevelJudge`, `VerifierAgent`, and `ExpectedBehaviorJudge` each accept an
+optional `model` (`str`) to override the default LLM judge; an explicit value
+must be `judgeEligible` (see [Models](#models)). `ExpectedBehaviorJudge` also
+accepts a `behavior_compliance` metric binding.
 
 Result inspection and recovery:
 

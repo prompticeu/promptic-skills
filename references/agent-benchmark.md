@@ -80,9 +80,10 @@ Choose the least complex evaluator that can measure the requirement:
 4. Choose `VerifierAgent` when evaluation requires a multi-step investigation
    across files, outputs, expected evidence, or traces.
 
-Judge model selection: evaluators that call an LLM judge (`FieldLevelJudge`
-judged fields, `ExpectedBehaviorJudge`, `VerifierAgent`) may take an explicit
-judge model, but only models marked `judgeEligible` in the AI Application's
+Judge model selection: evaluators that call an LLM judge (`FieldLevelJudge`,
+`VerifierAgent`, and `ExpectedBehaviorJudge` each accept an optional `model`)
+may take an explicit judge model, but only models marked `judgeEligible` in the
+AI Application's
 available-model list can be used. Discover them with `client.models.list()` (or
 `promptic models list`) and choose an `id` whose `judgeEligible` is `true`; omit
 the model to use the evaluator default. On create, update, and revision-draft
