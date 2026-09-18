@@ -324,16 +324,15 @@ Supported `config` keys for the `structuredOutput` type:
 - `schema_definition` (dict): JSON schema describing the prediction shape. Drives default per-field scoring — strings → embedding similarity, enums/booleans/integers → exact, numbers → tolerance, nested objects → recursive, arrays → content-aligned soft F1 (not positional).
 - `fields` (dict, optional): per-field overrides keyed by dotted JSON path. Each entry accepts:
   - `include` (bool, default `true`)
-  - `weight` (float, default `1.0`)
-  - `strategy` (string): scalar comparison — `"exact" | "embedding" | "contains" | "judge"`. The `judge` value enables LLM-as-judge per-pair scoring on string fields and surfaces reasoning in the case-details sheet.
-  - `array_strategy` (string): array aggregation — `"exact" | "similarity" | "judge"`. The `judge` value runs a single whole-array LLM call returning F1-compatible counts; arrays exceeding 50 items per side fall back to `similarity` with a warning marker.
-  - `judge_instructions` (string, optional): field-specific guidance appended to the built-in *"do these convey the same essential information?"* rubric for this field only. Valid only when this field's `strategy` or `array_strategy` is `judge`; setting it on a non-judged field is rejected. Omit to use the built-in rubric on its own — selecting `judge` never requires instructions.
+  - `weight` (float, default `1.0`): a finite number greater than `0`.
+  - `method` (string): one schema-aware scoring method. Scalar methods — `"exact" | "embedding" | "contains" | "judge"`; array methods — `"array_exact" | "array_similarity" | "array_judge"`. The scalar `judge` value enables per-pair LLM-as-judge scoring on any supported scalar field (text, numbers, booleans, and enums) and surfaces reasoning in the case-details sheet. The `array_judge` value runs a single whole-array LLM call returning F1-compatible counts; arrays exceeding 50 items per side fall back to `array_similarity` with a warning marker. The method must be compatible with the field's schema type, or the configuration is rejected.
+  - `judge_instructions` (string, optional): field-specific guidance appended to the built-in *"do these convey the same essential information?"* rubric for this field only. Valid only when this field's `method` is `judge` or `array_judge`; setting it on a non-judged field is rejected. Omit to use the built-in rubric on its own — selecting a judge method never requires instructions.
 
-  Whether a field counts as required is read from the JSON schema's `required` array, not from this dict — `FieldConfig` rejects unknown keys.
+  Whether a field counts as required is read from the JSON schema's `required` array, not from this dict. `FieldConfig` rejects unknown keys — including the legacy `strategy` and `array_strategy` keys, which are replaced by the single `method` key — and rejects field paths that are not present in the output schema.
 
 There is no evaluator-level `judge_instructions`; guidance lives on each judged field, so different fields can carry different notes.
 
-The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0` instead of ~`0.55`. Re-running older experiments may show lower scores on string-heavy schemas with unrelated content.
+The `embedding` method applies a calibrated cosine-similarity floor (`0.15`, tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0` instead of ~`0.55`. Re-running older experiments may show lower scores on string-heavy schemas with unrelated content.
 
 ### `toolSelection` evaluator
 

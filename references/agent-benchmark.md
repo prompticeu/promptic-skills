@@ -65,7 +65,7 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | Evaluator | Use it when | Required setup |
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
-| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with `exact`, `contains`, `embedding`, or `judge`; configure arrays with `exact`, `similarity`, or `judge`. Add field-specific judge instructions only for judged fields. |
+| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included scalar field with `exact`, `contains`, `embedding`, or `judge`, and each array field with `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for judged fields. |
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
@@ -194,7 +194,7 @@ structured = FieldLevelJudge(
             "judge",
             judge_instructions="Check factual equivalence, not writing style.",
         ),
-        "line_items": FieldScoring("exact", array_strategy="similarity"),
+        "line_items": FieldScoring("array_similarity"),
     }
 )
 
