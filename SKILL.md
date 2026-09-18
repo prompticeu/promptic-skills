@@ -276,6 +276,16 @@ async with AsyncPrompticClient() as client:
 
 Constructor args: `api_key`, `access_token`, `ai_application_id`, `endpoint`, `timeout` (default 30s). `workspace_id` is a deprecated alias for `ai_application_id`.
 
+### Model discovery
+
+`client.models.list()` returns the models available to the client's AI
+Application as `{"data": [...]}`. Each entry exposes `id` (pass this when
+selecting a model), `name`, `provider`, `group`, an optional `region`, and
+`judgeEligible`. When setting an explicit benchmark judge model on an evaluator,
+choose an `id` whose `judgeEligible` is `true` — non-eligible models are rejected
+with HTTP 400 and code `invalid_judge_model`; omit the model to use the
+evaluator default. Requires a platform release that exposes `GET /api/v1/models`.
+
 ### API reference
 
 For detailed method signatures and parameters, see [references/api.md](references/api.md).
@@ -390,6 +400,9 @@ promptic agent-gym reevaluate <benchmark-id> <run-id>
 promptic ai-application info         # Show current AI Application details
 promptic ai-application list         # List accessible AI Applications
 promptic ai-application select <id>  # Select active AI Application
+
+# Models
+promptic models list                # List models available to the AI Application (add --json)
 
 # Traces
 promptic traces list                # List recent traces
