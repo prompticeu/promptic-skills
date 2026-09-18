@@ -162,8 +162,10 @@ inline metric scoring into the API's separate binding map. Verifier metrics
 aggregate independently, so `VerifierAgent` has no evaluator-level weight.
 The lower-level `MetricBinding` mapping remains available for compatibility but
 must not configure a metric that already has non-default inline scoring.
-`ExpectedBehaviorJudge` accepts an optional model and a `behavior_compliance`
-metric binding.
+`FieldLevelJudge`, `VerifierAgent`, and `ExpectedBehaviorJudge` each accept an
+optional `model` (`str`) to override the default LLM judge; an explicit value
+must be `judgeEligible` (see [Models](#models)). `ExpectedBehaviorJudge` also
+accepts a `behavior_compliance` metric binding.
 
 Result inspection and recovery:
 
@@ -199,6 +201,26 @@ is set with the `ai_application_id` argument (or the `PROMPTIC_AI_APPLICATION_ID
 env var), which the SDK sends as the `X-AI-Application-Id` header; the legacy
 `workspace_id` / `PROMPTIC_WORKSPACE_ID` still work. Component and artifact
 responses expose the scope as `aiApplicationId`.
+
+## Models
+
+```python
+client.models.list() -> AvailableModelList
+```
+
+Lists the models available to the client's AI Application (backed by
+`GET /api/v1/models`). The result is `{"data": [AvailableModel, ...]}`. Each
+`AvailableModel` has `id` (the value to pass when selecting the model), `name`,
+`provider`, `group` (`"openai" | "platform" | "google" | "custom" |
+"openrouter"`), `judgeEligible` (bool), and an optional `region` (`"eu" | "us" |
+"global"`). Availability follows the AI Application's provider configuration and
+disabled-model settings; disabled models are omitted.
+
+Use `judgeEligible` to pick a valid benchmark judge model: only records with
+`judgeEligible == True` can be set as an explicit judge model on a benchmark
+evaluator (see the judge-model selection note in
+`references/agent-benchmark.md`). Requires a platform release that exposes
+`GET /api/v1/models`; older platforms return an API error.
 
 ## Components
 
