@@ -41,6 +41,11 @@ back to server-side base64 upload for compatibility.
 
 The user-facing feature is Agent Optimization. The Python SDK retains the
 `AgentGymClient` name and the CLI uses the `agent-gym` command group.
+For benchmark creation and listing, an AI Application-scoped API key supplies
+the application ID automatically. Login access tokens require
+`ai_application_id` or `PROMPTIC_AI_APPLICATION_ID`; `workspace_id` remains a
+deprecated compatibility alias. This behavior requires a compatible SDK and
+API release.
 
 ```python
 AgentGymClient(

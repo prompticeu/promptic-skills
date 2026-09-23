@@ -208,6 +208,12 @@ Use dotted field paths for nested fields.
 
 ## Configure a benchmark with Python
 
+With an AI Application-scoped API key, `AgentGymClient()` can infer the AI
+Application for `benchmarks.create()` and `benchmarks.list()`. With a login
+access token, pass `ai_application_id="<ai-application-uuid>"` to the client or
+set `PROMPTIC_AI_APPLICATION_ID`. Do not use the deprecated `workspace_id` name
+in new examples. Inference needs the SDK and API versions that support it.
+
 ```python
 from pathlib import Path
 
