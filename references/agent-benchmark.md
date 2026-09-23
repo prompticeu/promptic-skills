@@ -22,12 +22,14 @@ variant may return. Both are JSON object schemas.
 
 Declare each File field as `{"type": "array", "x-promptic-type": "file"}` in
 both Input and Output schemas, even when a case has just one file. When adding
-a case with the Python SDK, pass one `BenchmarkFile(path)` directly; the SDK
-wraps it in a one-item array for the API. Pass a list of `BenchmarkFile` values
-for multiple files. A string File schema is not supported and yields a 422
-schema error. Typed runner inputs use `list[MaterializedInputFile]` for the
-same field. Declare a generated artifact in the Output schema and return it
-with the same field path; do not treat output files as unrelated attachments.
+a case with the Python SDK, pass `[BenchmarkFile(path)]` for one file or a list
+of `BenchmarkFile` values for multiple files. This list form works with existing
+SDK releases. Newer SDK versions also accept a direct `BenchmarkFile(path)` and
+wrap it in a one-item array for the API. A string File schema is not supported
+and yields a 422 schema error. Typed runner inputs use
+`list[MaterializedInputFile]` for the same field. Declare a generated artifact
+in the Output schema and return it with the same field path; do not treat
+output files as unrelated attachments.
 
 Across input and expected output, each case supports at most 10 files. Each file
 may be at most 25,000,000 bytes, and their combined size may be at most
@@ -280,11 +282,11 @@ with AgentGymClient() as gym:
 
     benchmark.cases.add(
         title="Invoice with ambiguous identifier",
-        input={"document": BenchmarkFile(Path("fixtures/invoice.pdf"))},
+        input={"document": [BenchmarkFile(Path("fixtures/invoice.pdf"))]},
         output={
             "invoice_number": "INV-1042",
             "currency": "EUR",
-            "report": BenchmarkFile(Path("fixtures/expected-report.pdf")),
+            "report": [BenchmarkFile(Path("fixtures/expected-report.pdf"))],
         },
         expected_behavior=(
             "Use the invoice identifier, not the nearby purchase-order number, "
