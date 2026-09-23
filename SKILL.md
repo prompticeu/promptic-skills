@@ -47,6 +47,12 @@ export PROMPTIC_API_KEY="ptc_..."
 
 Config resolution: explicit args > env vars (`PROMPTIC_API_KEY`, `PROMPTIC_ENDPOINT`) > `~/.promptic/config.toml`.
 
+For Agent Optimization benchmark authoring, an AI Application-scoped API key
+selects the AI Application automatically. Login access tokens need an explicit
+`ai_application_id` or `PROMPTIC_AI_APPLICATION_ID`. See
+[references/agent-benchmark.md](references/agent-benchmark.md) for the authoring
+workflow. This inference requires the SDK and API release that supports it.
+
 ## Tracing
 
 Call `promptic_sdk.init()` once at startup. All LLM calls from installed providers are auto-instrumented via OpenTelemetry.
