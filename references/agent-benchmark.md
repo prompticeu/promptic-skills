@@ -33,7 +33,8 @@ output files as unrelated attachments.
 
 Place File fields on named object properties, optionally inside another named
 object or an array's single `items` object schema. A File field may have
-`type: ["array", "null"]` when it is nullable. Do not put File fields under
+`type: ["array", "null"]` when it is nullable; containing objects and arrays of
+objects may be nullable too. Do not put File fields under
 `anyOf`/`oneOf` branches, dynamic `additionalProperties` mappings, or tuple
 `prefixItems`: the case uploader and importer do not traverse those locations.
 Use a fixed property name or an array of objects instead. The SDK and API
