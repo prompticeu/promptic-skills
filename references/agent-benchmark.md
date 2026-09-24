@@ -81,7 +81,7 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | Evaluator | Use it when | Required setup |
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
-| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with `exact`, `contains`, `embedding`, or `judge`; configure arrays with `exact`, `similarity`, or `judge`. Add field-specific judge instructions only for judged fields. |
+| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Define the Output schema; the platform derives default field configuration when the SDK evaluator omits `fields`. Configure custom per-field strategies in the dashboard for now. |
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
@@ -90,7 +90,7 @@ Choose the least complex evaluator that can measure the requirement:
 1. Choose `ClassificationF1` for categorical enum fields measured across a
    representative case set.
 2. Choose `FieldLevelJudge` when the Output contract identifies the values to
-   check and each field can have an explicit comparison rule.
+   check and the schema-derived field defaults are appropriate.
 3. Add `ExpectedBehaviorJudge` when a case has a narrow execution requirement
    that must be verified from its trace.
 4. Choose `VerifierAgent` when evaluation requires a multi-step investigation
@@ -110,11 +110,12 @@ the Agent chose it or whether its execution was appropriate.
 ### Field-level judge
 
 Use field-level evaluation when the structured Output contract makes failures
-decomposable. Select exact comparison for identifiers and other canonical
-values, containment for required content, semantic comparison for equivalent
-language, and array strategies for lists. Reserve a per-field LLM judge for a
-field whose correctness genuinely requires interpretation, and give that field
-specific instructions.
+decomposable. The platform derives its default field configuration from the
+Output schema. If a task needs specific comparison methods, excluded fields,
+array strategies, or per-field judge instructions, configure those in the
+dashboard. This SDK version serializes explicit `FieldScoring` overrides in a
+shape the platform API rejects, so do not pass a `fields` map from the SDK or
+CLI until that mapping is fixed.
 
 This is preferable to holistic judging when it can express the contract: it is
 cheaper, easier to calibrate, and reveals exactly which output field regressed.
@@ -197,30 +198,19 @@ Common typed configurations look like this:
 from promptic_sdk import (
     ClassificationF1,
     FieldLevelJudge,
-    FieldScoring,
     ExpectedBehaviorJudge,
 )
 
 classification = ClassificationF1(field_paths=("currency",))
 
-structured = FieldLevelJudge(
-    fields={
-        "invoice_number": FieldScoring("exact", weight=2),
-        "summary": FieldScoring(
-            "judge",
-            judge_instructions="Check factual equivalence, not writing style.",
-        ),
-        "line_items": FieldScoring("exact", array_strategy="similarity"),
-    }
-)
+structured = FieldLevelJudge()
 
 behavior = ExpectedBehaviorJudge()
 ```
 
-Pass one or more of these objects in `evaluators=[...]`. For
-`FieldLevelJudge`, omitted Output-schema fields do not receive an explicit
-override; use `include=False` when a listed field is intentionally excluded.
-Use dotted field paths for nested fields.
+Pass one or more of these objects in `evaluators=[...]`. `FieldLevelJudge()`
+uses schema-derived defaults for the Output fields; customize individual
+fields in the dashboard when those defaults do not match the scoring goal.
 
 ## Configure a benchmark with Python
 
