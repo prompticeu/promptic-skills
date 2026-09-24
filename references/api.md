@@ -56,6 +56,21 @@ AgentGymClient(
     ai_application_id: str | None = None,
 )
 
+FieldScoring(
+    method: Literal[
+        "exact",
+        "embedding",
+        "contains",
+        "judge",
+        "array_exact",
+        "array_similarity",
+        "array_judge",
+    ] = "exact",
+    include: bool = True,
+    judge_instructions: str | None = None,
+    weight: float = 1.0,
+)
+
 client.download_dataset(
     benchmark_id: str,
     destination: str | os.PathLike[str],
@@ -330,15 +345,29 @@ Supported `config` keys for the `structuredOutput` type:
 - `fields` (dict, optional): per-field overrides keyed by dotted JSON path. Each entry accepts:
   - `include` (bool, default `true`)
   - `weight` (float, default `1.0`)
-  - `strategy` (string): scalar comparison — `"exact" | "embedding" | "contains" | "judge"`. The `judge` value enables LLM-as-judge per-pair scoring on string fields and surfaces reasoning in the case-details sheet.
-  - `array_strategy` (string): array aggregation — `"exact" | "similarity" | "judge"`. The `judge` value runs a single whole-array LLM call returning F1-compatible counts; arrays exceeding 50 items per side fall back to `similarity` with a warning marker.
-  - `judge_instructions` (string, optional): field-specific guidance appended to the built-in *"do these convey the same essential information?"* rubric for this field only. Valid only when this field's `strategy` or `array_strategy` is `judge`; setting it on a non-judged field is rejected. Omit to use the built-in rubric on its own — selecting `judge` never requires instructions.
+  - `method` (string): the single comparison selector. Scalar methods are
+    `"exact" | "embedding" | "contains" | "judge"`; array methods are
+    `"array_exact" | "array_similarity" | "array_judge"`. `judge` enables
+    LLM-as-judge per-pair scoring on string fields. `array_judge` runs a single
+    whole-array LLM call returning F1-compatible counts; arrays exceeding 50
+    items per side fall back to array similarity with a warning marker.
+  - `judge_instructions` (string, optional): field-specific guidance appended
+    to the built-in *"do these convey the same essential information?"* rubric
+    for this field only. Valid only when `method` is `"judge"` or
+    `"array_judge"`; setting it for another method is rejected. Omit to use the
+    built-in rubric on its own — selecting a judge method never requires
+    instructions.
 
-  Whether a field counts as required is read from the JSON schema's `required` array, not from this dict — `FieldConfig` rejects unknown keys.
+  Whether a field counts as required is read from the JSON schema's `required`
+  array, not from this dict. The current SDK rejects the former `strategy` and
+  `array_strategy` keys; use `method` instead.
 
 There is no evaluator-level `judge_instructions`; guidance lives on each judged field, so different fields can carry different notes.
 
-The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0` instead of ~`0.55`. Re-running older experiments may show lower scores on string-heavy schemas with unrelated content.
+The `embedding` method applies a calibrated cosine-similarity floor (`0.15`,
+tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0`
+instead of ~`0.55`. Re-running older experiments may show lower scores on
+string-heavy schemas with unrelated content.
 
 ### `toolSelection` evaluator
 

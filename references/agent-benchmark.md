@@ -65,7 +65,7 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | Evaluator | Use it when | Required setup |
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
-| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with `exact`, `contains`, `embedding`, or `judge`; configure arrays with `exact`, `similarity`, or `judge`. Add field-specific judge instructions only for judged fields. |
+| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with scalar method `exact`, `contains`, `embedding`, or `judge`, or array method `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for `judge` and `array_judge`. |
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
@@ -96,9 +96,9 @@ the Agent chose it or whether its execution was appropriate.
 Use field-level evaluation when the structured Output contract makes failures
 decomposable. Select exact comparison for identifiers and other canonical
 values, containment for required content, semantic comparison for equivalent
-language, and array strategies for lists. Reserve a per-field LLM judge for a
-field whose correctness genuinely requires interpretation, and give that field
-specific instructions.
+language, and the corresponding array methods for lists. Reserve a per-field
+LLM judge for a field whose correctness genuinely requires interpretation, and
+give that field specific instructions.
 
 This is preferable to holistic judging when it can express the contract: it is
 cheaper, easier to calibrate, and reveals exactly which output field regressed.
@@ -189,17 +189,22 @@ classification = ClassificationF1(field_paths=("currency",))
 
 structured = FieldLevelJudge(
     fields={
-        "invoice_number": FieldScoring("exact", weight=2),
+        "invoice_number": FieldScoring(method="exact", weight=2),
         "summary": FieldScoring(
-            "judge",
+            method="judge",
             judge_instructions="Check factual equivalence, not writing style.",
         ),
-        "line_items": FieldScoring("exact", array_strategy="similarity"),
+        "line_items": FieldScoring(method="array_similarity"),
     }
 )
 
 behavior = ExpectedBehaviorJudge()
 ```
+
+`FieldScoring` has one comparison selector, `method`. Its scalar values are
+`exact`, `embedding`, `contains`, and `judge`; its array values are
+`array_exact`, `array_similarity`, and `array_judge`. The former `strategy` and
+`array_strategy` keywords are not accepted by the current SDK.
 
 Pass one or more of these objects in `evaluators=[...]`. For
 `FieldLevelJudge`, omitted Output-schema fields do not receive an explicit
