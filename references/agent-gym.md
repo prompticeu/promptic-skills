@@ -307,7 +307,12 @@ and `insufficient_evidence` results indicate missing score coverage even when
 other metrics succeeded. Verifier metrics appear independently and expose
 `source_evaluator_id` plus `metric_key`; do not parse the opaque result ID.
 Per-field means use a `succeeded_only` basis and therefore need not reconcile
-with an official aggregate that zero-fills failed cases.
+with an official aggregate that zero-fills failed cases. The one exception is a
+required-evidence precondition failure (`required_trace_missing` or
+`required_evidence_missing`): the official aggregate excludes these cases from
+that metric instead of zero-filling them, so the leaderboard reports a partially
+evaluated score, or "—" when no case had the required evidence, with a coverage
+warning rather than a misleading 0%.
 
 ## Promote the chosen variant
 
@@ -335,6 +340,9 @@ promptic agent-gym submission-cancel "$BENCHMARK_ID" "$SUBMISSION_ID" --yes
   replacement leaderboard entry.
 - Rerunning the Agent creates a new empty submission session.
 - Cancel only an unsubmitted session that should accept no more predictions.
+- Submit each session before its `ttl_seconds` window elapses. An unsubmitted
+  session that expires becomes terminal (`expired`) and its run is marked
+  ineligible (`submission_expired`); start a new session to retry.
 - If required evaluator evidence is missing or evaluation fails, inspect the
   run's eligibility state rather than treating a partial score as official.
 
