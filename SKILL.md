@@ -316,6 +316,8 @@ existing-benchmark discovery, callback contract, resumable sessions, durable
 uploads, scoring submission, result inspection, comparison, and recovery. For
 exact public signatures, also read the Agent Optimization section of
 [references/api.md](references/api.md).
+For `FieldScoring`, select scalar or array behavior with the single `method=`
+argument. Do not use the retired `strategy` or `array_strategy` keywords.
 Do not add or describe Auto Engineer or autonomous optimization loops; they are
 not part of this workflow.
 
