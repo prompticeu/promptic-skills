@@ -81,7 +81,7 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | Evaluator | Use it when | Required setup |
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
-| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Define the Output schema; the platform derives default field configuration when the SDK evaluator omits `fields`. Configure custom per-field strategies in the dashboard for now. |
+| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Define the Output schema for defaults, or configure included fields with scalar method `exact`, `contains`, `embedding`, or `judge`, or array method `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for `judge` and `array_judge`. |
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
@@ -110,12 +110,12 @@ the Agent chose it or whether its execution was appropriate.
 ### Field-level judge
 
 Use field-level evaluation when the structured Output contract makes failures
-decomposable. The platform derives its default field configuration from the
-Output schema. If a task needs specific comparison methods, excluded fields,
-array strategies, or per-field judge instructions, configure those in the
-dashboard. This SDK version serializes explicit `FieldScoring` overrides in a
-shape the platform API rejects, so do not pass a `fields` map from the SDK or
-CLI until that mapping is fixed.
+decomposable. The platform derives default field configuration from the Output
+schema when `fields` is omitted. For custom scoring, select exact comparison
+for identifiers and other canonical values, containment for required content,
+semantic comparison for equivalent language, and the corresponding array
+methods for lists. Reserve a per-field LLM judge for a field whose correctness
+genuinely requires interpretation, and give that field specific instructions.
 
 This is preferable to holistic judging when it can express the contract: it is
 cheaper, easier to calibrate, and reveals exactly which output field regressed.
@@ -198,21 +198,44 @@ Common typed configurations look like this:
 from promptic_sdk import (
     ClassificationF1,
     FieldLevelJudge,
+    FieldScoring,
     ExpectedBehaviorJudge,
 )
 
 classification = ClassificationF1(field_paths=("currency",))
 
-structured = FieldLevelJudge()
+structured = FieldLevelJudge(
+    fields={
+        "invoice_number": FieldScoring(method="exact", weight=2),
+        "summary": FieldScoring(
+            method="judge",
+            judge_instructions="Check factual equivalence, not writing style.",
+        ),
+        "line_items": FieldScoring(method="array_similarity"),
+    }
+)
 
 behavior = ExpectedBehaviorJudge()
 ```
 
-Pass one or more of these objects in `evaluators=[...]`. `FieldLevelJudge()`
-uses schema-derived defaults for the Output fields; customize individual
-fields in the dashboard when those defaults do not match the scoring goal.
+`FieldScoring` has one comparison selector, `method`. Its scalar values are
+`exact`, `embedding`, `contains`, and `judge`; its array values are
+`array_exact`, `array_similarity`, and `array_judge`. The former `strategy` and
+`array_strategy` keywords are not accepted by the current SDK.
+
+Pass one or more of these objects in `evaluators=[...]`. For
+`FieldLevelJudge`, omit `fields` entirely to use schema-derived defaults. If
+you provide a `fields` map, omitted Output-schema fields do not receive an
+explicit override; use `include=False` when a listed field is intentionally
+excluded. Use dotted field paths for nested fields.
 
 ## Configure a benchmark with Python
+
+With an AI Application-scoped API key, `AgentGymClient()` can infer the AI
+Application for `benchmarks.create()` and `benchmarks.list()`. With a login
+access token, pass `ai_application_id="<ai-application-uuid>"` to the client or
+set `PROMPTIC_AI_APPLICATION_ID`. Do not use the deprecated `workspace_id` name
+in new examples. Inference needs the SDK and API versions that support it.
 
 ```python
 from pathlib import Path
