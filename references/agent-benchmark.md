@@ -26,10 +26,18 @@ a case with the Python SDK, pass `[BenchmarkFile(path)]` for one file or a list
 of `BenchmarkFile` values for multiple files. This list form works with existing
 SDK releases. Newer SDK versions also accept a direct `BenchmarkFile(path)` and
 wrap it in a one-item array for the API. A string File schema is not supported
-and yields a 422 schema error. Typed runner inputs use
+and fails schema validation. Typed runner inputs use
 `list[MaterializedInputFile]` for the same field. Declare a generated artifact
 in the Output schema and return it with the same field path; do not treat
 output files as unrelated attachments.
+
+Place File fields on named object properties, optionally inside another named
+object or an array's single `items` object schema. A File field may have
+`type: ["array", "null"]` when it is nullable. Do not put File fields under
+`anyOf`/`oneOf` branches, dynamic `additionalProperties` mappings, or tuple
+`prefixItems`: the case uploader and importer do not traverse those locations.
+Use a fixed property name or an array of objects instead. The SDK and API
+reject unsupported File shapes with a field path before importing case data.
 
 Across input and expected output, each case supports at most 10 files. Each file
 may be at most 25,000,000 bytes, and their combined size may be at most
