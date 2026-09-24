@@ -376,7 +376,9 @@ and iterations come back through the normal SDK methods. Use
 
 ## CLI
 
-The `promptic` CLI mirrors the API client. All commands support `--json` for JSON output.
+The `promptic` CLI covers the common workflows below. Some Agent Gym inspection and
+submission-management operations are available only through the Python SDK. All commands
+support `--json` for JSON output.
 
 ```
 # Auth
@@ -390,8 +392,6 @@ promptic agent-gym dataset-pull <benchmark-id> -o ./benchmark-inputs
 promptic agent-gym apply agent.json
 promptic agent-gym run <benchmark-id> my_agent:run \
   --name my-agent --version 1.0.0 --architecture architecture.md
-promptic agent-gym results <benchmark-id> <run-id>
-promptic agent-gym compare-runs <benchmark-id> <baseline-run-id> <candidate-run-id>
 promptic agent-gym reevaluate <benchmark-id> <run-id>
 
 # AI Application
@@ -449,6 +449,9 @@ promptic datasets delete <ds-id> --component <id>  # Delete dataset
 # the dataset-case REST endpoints, not a dedicated CLI command.
 
 ```
+
+Inspect run results and compare runs with `AgentGymClient.get_run_results()` and
+`AgentGymClient.compare_runs()`; the CLI does not expose those commands yet.
 
 ## Key Types
 

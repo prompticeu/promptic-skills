@@ -20,9 +20,25 @@ and files every variant receives. The **Output schema** is its result contract.
 It defines structured values and generated-file fields that a successful
 variant may return. Both are JSON object schemas.
 
-Use `"x-promptic-type": "file"` on a schema field containing files. Declare a
-generated artifact in the Output schema and return it with the same field path;
-do not treat output files as unrelated attachments.
+Declare each File field as `{"type": "array", "x-promptic-type": "file"}` in
+both Input and Output schemas, even when a case has just one file. When adding
+a case with the Python SDK, pass `[BenchmarkFile(path)]` for one file or a list
+of `BenchmarkFile` values for multiple files. This list form works with existing
+SDK releases. Newer SDK versions also accept a direct `BenchmarkFile(path)` and
+wrap it in a one-item array for the API. A string File schema is not supported
+and fails schema validation. Typed runner inputs use
+`list[MaterializedInputFile]` for the same field. Declare a generated artifact
+in the Output schema and return it with the same field path; do not treat
+output files as unrelated attachments.
+
+Place File fields on named object properties, optionally inside another named
+object or an array's single `items` object schema. A File field may have
+`type: ["array", "null"]` when it is nullable; containing objects and arrays of
+objects may be nullable too. Do not put File fields under
+`anyOf`/`oneOf` branches, dynamic `additionalProperties` mappings, or tuple
+`prefixItems`: the case uploader and importer do not traverse those locations.
+Use a fixed property name or an array of objects instead. The SDK and API
+reject unsupported File shapes with a field path before importing case data.
 
 Across input and expected output, each case supports at most 10 files. Each file
 may be at most 25,000,000 bytes, and their combined size may be at most
@@ -65,7 +81,7 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | Evaluator | Use it when | Required setup |
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
-| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with scalar method `exact`, `contains`, `embedding`, or `judge`, or array method `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for `judge` and `array_judge`. |
+| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Define the Output schema for defaults, or configure included fields with scalar method `exact`, `contains`, `embedding`, or `judge`, or array method `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for `judge` and `array_judge`. |
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
@@ -74,7 +90,7 @@ Choose the least complex evaluator that can measure the requirement:
 1. Choose `ClassificationF1` for categorical enum fields measured across a
    representative case set.
 2. Choose `FieldLevelJudge` when the Output contract identifies the values to
-   check and each field can have an explicit comparison rule.
+   check and the schema-derived field defaults are appropriate.
 3. Add `ExpectedBehaviorJudge` when a case has a narrow execution requirement
    that must be verified from its trace.
 4. Choose `VerifierAgent` when evaluation requires a multi-step investigation
@@ -94,11 +110,12 @@ the Agent chose it or whether its execution was appropriate.
 ### Field-level judge
 
 Use field-level evaluation when the structured Output contract makes failures
-decomposable. Select exact comparison for identifiers and other canonical
-values, containment for required content, semantic comparison for equivalent
-language, and the corresponding array methods for lists. Reserve a per-field
-LLM judge for a field whose correctness genuinely requires interpretation, and
-give that field specific instructions.
+decomposable. The platform derives default field configuration from the Output
+schema when `fields` is omitted. For custom scoring, select exact comparison
+for identifiers and other canonical values, containment for required content,
+semantic comparison for equivalent language, and the corresponding array
+methods for lists. Reserve a per-field LLM judge for a field whose correctness
+genuinely requires interpretation, and give that field specific instructions.
 
 This is preferable to holistic judging when it can express the contract: it is
 cheaper, easier to calibrate, and reveals exactly which output field regressed.
@@ -207,9 +224,10 @@ behavior = ExpectedBehaviorJudge()
 `array_strategy` keywords are not accepted by the current SDK.
 
 Pass one or more of these objects in `evaluators=[...]`. For
-`FieldLevelJudge`, omitted Output-schema fields do not receive an explicit
-override; use `include=False` when a listed field is intentionally excluded.
-Use dotted field paths for nested fields.
+`FieldLevelJudge`, omit `fields` entirely to use schema-derived defaults. If
+you provide a `fields` map, omitted Output-schema fields do not receive an
+explicit override; use `include=False` when a listed field is intentionally
+excluded. Use dotted field paths for nested fields.
 
 ## Configure a benchmark with Python
 
