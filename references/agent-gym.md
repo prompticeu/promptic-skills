@@ -308,11 +308,11 @@ other metrics succeeded. Verifier metrics appear independently and expose
 `source_evaluator_id` plus `metric_key`; do not parse the opaque result ID.
 Per-field means use a `succeeded_only` basis and therefore need not reconcile
 with an official aggregate that zero-fills failed cases. The one exception is a
-required-evidence precondition failure (`required_trace_missing` or
-`required_evidence_missing`): the official aggregate excludes these cases from
-that metric instead of zero-filling them, so the leaderboard reports a partially
-evaluated score, or "—" when no case had the required evidence, with a coverage
-warning rather than a misleading 0%.
+required-evidence precondition failure (for example a case missing the execution
+trace the Expected Behavior Judge requires): the official aggregate excludes these
+cases from that metric instead of zero-filling them, so the leaderboard reports a
+partially evaluated score, or "—" when no case had the required evidence, with a
+coverage warning rather than a misleading 0%.
 
 ## Promote the chosen variant
 
