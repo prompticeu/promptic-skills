@@ -347,10 +347,18 @@ Supported `config` keys for the `structuredOutput` type:
   - `weight` (float, default `1.0`)
   - `method` (string): the single comparison selector. Scalar methods are
     `"exact" | "embedding" | "contains" | "judge"`; array methods are
-    `"array_exact" | "array_similarity" | "array_judge"`. `judge` enables
-    LLM-as-judge per-pair scoring on string fields. `array_judge` runs a single
-    whole-array LLM call returning F1-compatible counts; arrays exceeding 50
-    items per side fall back to array similarity with a warning marker.
+    `"array_exact" | "array_similarity" | "array_judge"`. `judge` scores an
+    `(expected, predicted)` pair with an LLM-as-judge call and surfaces its
+    reasoning in the case-details sheet. It compares the whole field value, so
+    besides any scalar (text, numbers, booleans, enums) it is also the method to
+    use for a mixed scalar/container union such as
+    `string | number | boolean | array | null` — including when the expected and
+    predicted values use different variants. A field whose non-null type is
+    always an array uses `array_judge` instead. The judge preserves JSON types,
+    so a string such as `"[10, 20]"` never silently matches an array `[10, 20]`.
+    `array_judge` runs a single whole-array LLM call returning F1-compatible
+    counts; arrays exceeding 50 items per side fall back to array similarity with
+    a warning marker.
   - `judge_instructions` (string, optional): field-specific guidance appended
     to the built-in *"do these convey the same essential information?"* rubric
     for this field only. Valid only when `method` is `"judge"` or
@@ -360,7 +368,12 @@ Supported `config` keys for the `structuredOutput` type:
 
   Whether a field counts as required is read from the JSON schema's `required`
   array, not from this dict. The current SDK rejects the former `strategy` and
-  `array_strategy` keys; use `method` instead.
+  `array_strategy` keys; use `method` instead. An excluded field
+  (`include: false`) keeps its stored `method` — including the SDK default
+  `exact` — and skips the method/schema compatibility check, so an excluded
+  field never needs a method that matches its type. The method name is still
+  validated and the path must exist in the output schema; compatibility is
+  enforced again if the field is later included in scoring.
 
 There is no evaluator-level `judge_instructions`; guidance lives on each judged field, so different fields can carry different notes.
 
