@@ -202,7 +202,13 @@ client.cancel_submission(benchmark_id, submission_id)
 
 `get_run_results()` includes `score_status_counts`. Verifier evaluator results
 include `source_evaluator_id` and `metric_key`; per-field result maps declare
-their `mean_per_field_scores_basis` as `succeeded_only`.
+their `mean_per_field_scores_basis` as `succeeded_only`. Each `aggregates` entry
+carries one canonical `overall_score` per variant (the weighted average of that
+variant's available evaluator aggregates, 0–1; `None` when none is available)
+plus an `evaluation_coverage` object reporting expected/succeeded evaluations and
+fully evaluated cases from the frozen plan. `compare_runs()` reports
+`summary.overall_score_delta`. There is no separate case-average or composite
+run total; read the evaluator, field, and case breakdowns for finer detail.
 
 Use `references/agent-gym.md` for the executable workflow and trust boundary.
 Use the session API when the trusted runner must isolate untrusted execution,
