@@ -299,10 +299,16 @@ The SDK equivalents are `get_run_results()`, `list_case_results()`,
 `iter_case_results()`, `get_case_result()`, `download_prediction_artifact()`,
 and `compare_runs()`. Review weak and failed cases, judge reasoning, generated
 files, trace evidence, latency, and token usage; do not choose a variant from
-the mean score alone. Paired comparison requires compatible runs from the same
+the overall score alone. Paired comparison requires compatible runs from the same
 immutable benchmark and evaluator setup.
 
-Inspect `score_status_counts` before trusting an aggregate. Failed, skipped,
+Each variant exposes one canonical `overall_score` (the weighted average of its
+available evaluator aggregates, 0–1; `None` when none is available), the same
+value shown on the leaderboard, variant details, and export, with an
+`evaluation_coverage` object reporting expected/succeeded evaluations and fully
+evaluated cases; `compare_runs()` reports `summary.overall_score_delta`. There is
+no separate case-average or composite run total. Inspect `score_status_counts`
+before trusting an aggregate. Failed, skipped,
 and `insufficient_evidence` results indicate missing score coverage even when
 other metrics succeeded. Verifier metrics appear independently and expose
 `source_evaluator_id` plus `metric_key`; do not parse the opaque result ID.
