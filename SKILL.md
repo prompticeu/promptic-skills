@@ -66,7 +66,7 @@ client = OpenAI()
 
 with promptic_sdk.ai_component("my-agent"):
     response = client.chat.completions.create(
-        model="gpt-4.1-nano",
+        model="gpt-5.6-luna",
         messages=[{"role": "user", "content": "Hello!"}],
     )
 ```
@@ -332,7 +332,7 @@ with PrompticClient() as client:
     # Create experiment
     exp = client.create_experiment(
         ai_component_id="comp_...",
-        target_model="gpt-4.1-nano",
+        target_model="gpt-5.6-luna",
         task_type="classification",  # or "textGeneration", "structuredOutput"
         initial_prompt="Classify the following text into categories.",
         optimizer="prompticV2",      # or "miproV2", "bootstrapFewShot"
