@@ -273,6 +273,26 @@ client.duplicate_experiment(
 ) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
 
+**Multi-message prompts (SDK 1.1.0):** `create_experiment` has no
+`prompt_format`/`initial_prompt_messages` arguments. Before starting the returned
+pending experiment, call:
+
+```python
+client.update_experiment(
+    exp["id"],
+    promptFormat="multi_message",
+    initialPromptMessages=[
+        {"role": "system", "content": "Classify the message."},
+        {"role": "user", "content": "{message}"},
+    ],
+)
+```
+
+Preserve message order and roles; placeholders reference case `inputPayload` keys.
+These update fields use camelCase and work with synchronous and asynchronous
+clients. Direct API creation also accepts `promptFormat` and `initialPromptMessages`.
+
+
 Each `Experiment` exposes its `aiComponentId` and a dedicated `datasetId`.
 Training and eval data are supplied as dataset cases on that dataset (see
 [Datasets](#datasets)) — there is no separate experiment-scoped observation
