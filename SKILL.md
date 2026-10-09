@@ -377,6 +377,24 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
+### Cancel an experiment
+
+When the user asks to stop a prompt/tool optimization run, call
+`client.cancel_experiment(experiment_id)` (or await the async equivalent), or use
+`promptic experiments cancel <id> --yes --json` after user authorization.
+This requires the SDK/CLI and server release that includes experiment cancellation;
+older SDKs do not expose the method or command.
+
+`{"status": "canceling"}` acknowledges the request, not a stopped worker. Read
+`get_experiment(id)["experimentStatus"]` until terminal, using bounded polling if
+waiting was requested. Only `canceled` confirms cancellation; `completed` or
+`failed` must be reported as their actual outcome. Ownerless pending/scheduled
+runs can return `canceled` immediately. In-flight work may finish and incur usage
+charges; saved results remain. Repeated cancellation requests are idempotent.
+Do not use deletion, Ctrl-C, or a client timeout as a substitute for remote
+cancellation. Active runs must stop before deletion. See
+[the API cancellation contract](references/api.md#cancel-an-experiment) for errors.
+
 ## Tool Optimization
 
 Distinct from prompt optimization, Promptic also optimizes the **tool descriptions** an LLM chooses between so the model picks the right tool for a query (task type `toolSelection`). It's a separate optimizer: the input is a set of tool definitions and representative queries, and each iteration returns optimized descriptions in `toolDescriptions` plus `selectionSystemPrompt` when system-prompt optimization is enabled.
@@ -436,6 +454,7 @@ promptic experiments get <id>       # Get experiment details
 promptic experiments update <id>    # Update a pending experiment
 promptic experiments delete <id>    # Delete an experiment
 promptic experiments start <id>     # Start optimization
+promptic experiments cancel <id> [--yes] [--json] # Request cancellation; does not wait
 promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (dataset cases + evaluators)
 promptic experiments continue <id> [--start]                 # Clone, seed initial prompt from source's best iteration
 
@@ -469,7 +488,7 @@ promptic datasets delete <ds-id> --component <id>  # Delete dataset
 ## Key Types
 
 Enums (Literal types):
-- `ExperimentStatus`: `"pending" | "scheduled" | "running" | "completed" | "failed"`
+- `ExperimentStatus`: `"pending" | "scheduled" | "running" | "canceling" | "canceled" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` experiments are created with the dedicated `create_tool_selection_experiment(...)` method, **not** by passing a `task_type` to `create_experiment(...)`; the value is also surfaced by `get_experiment(...)` / `list_experiments(...)` for existing tool-selection / MCP-optimization experiments.
 - `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.

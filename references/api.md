@@ -265,6 +265,7 @@ client.get_experiment(experiment_id: str) -> Experiment
 client.update_experiment(experiment_id: str, **updates) -> Experiment
 client.delete_experiment(experiment_id: str) -> None
 client.start_experiment(experiment_id: str) -> ExperimentStarted
+client.cancel_experiment(experiment_id: str) -> ExperimentCancellation
 client.duplicate_experiment(
     experiment_id: str,
     *,
@@ -284,6 +285,34 @@ The platform also supports `toolSelection` for optimizing tool descriptions
 from MCP or manually supplied definitions. Do not pass it as `task_type` to
 `create_experiment(...)`; use `create_tool_selection_experiment(...)` instead.
 Returned experiments may include `systemPrompt` and `optimizeSystemPrompt`.
+
+### Cancel an experiment
+
+Requires an SDK and server release with experiment-cancellation support. Both
+sync and async clients expose `cancel_experiment(experiment_id)`, which sends
+`POST /api/v1/experiments/{experimentId}/cancel` without a request body.
+
+- `{"status": "canceled"}`: cancellation is complete, including an ownerless
+  pending/scheduled run canceled before work starts.
+- `{"status": "canceling"}`: the request was accepted; the worker still needs to
+  stop at a safe boundary. In-flight work may finish and incur usage charges.
+
+The method does not wait. If the user needs confirmation that work has stopped,
+poll `get_experiment` with a bounded timeout and reasonable interval until
+`experimentStatus` is `canceled`, `completed`, or `failed`. Report the actual
+outcome; a polling timeout is not proof of cancellation. Saved results remain.
+Repeated requests for canceling/canceled experiments are idempotent.
+
+Errors preserve `PrompticAPIError.status_code`: `401` for authentication, `404`
+for an unknown experiment or one outside the selected AI Application, and `409`
+for an experiment that cannot be canceled (such as completed/failed).
+
+CLI: `promptic experiments cancel <id>` asks for confirmation; use `--yes --json`
+for an already-authorized scripted request. Exit code zero means the request
+succeeded, not necessarily that the worker has stopped. Check
+`promptic experiments get <id> --json` for the current status. Stopping the local
+client or pressing Ctrl-C does not cancel remote work. Do not use deletion as a
+substitute: cancel and confirm a terminal status before deleting an active run.
 
 ## Evaluators
 
