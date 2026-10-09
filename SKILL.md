@@ -377,6 +377,43 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
+### Multi-message prompts
+
+Preserve system, user, and assistant messages as an ordered message list; do not
+flatten a chat prompt into one string. `{var}` placeholders work inside message
+content and must match the case's `inputPayload` keys. Put expected answers in
+`expectedPayload`, not in a user or assistant message used as an input.
+
+The SDK's `create_experiment` accepts `input_variables`, but **does not accept**
+`prompt_format` or `initial_prompt_messages`. Create the pending experiment,
+then set the message contract with `update_experiment` using the API's camelCase
+field names. Do this before starting the experiment; updates after it starts
+are rejected.
+
+```python
+with PrompticClient() as client:
+    exp = client.create_experiment(
+        ai_component_id="comp_...",
+        target_model="gpt-5.6-luna",
+        task_type="classification",
+        input_variables=[{"name": "message", "column": "message"}],
+    )
+    client.update_experiment(
+        exp["id"],
+        promptFormat="multi_message",
+        initialPromptMessages=[
+            {"role": "system", "content": "Classify the message as positive or negative."},
+            {"role": "user", "content": "{message}"},
+        ],
+    )
+    # Upload cases to exp["datasetId"] and add evaluators as above, then start.
+```
+
+Async clients use the same fields with awaited calls. For direct API creation,
+send `promptFormat: "multi_message"`, `initialPromptMessages`, and `inputVariables`
+in the experiment creation body. Check the installed SDK signature before using
+new creation arguments; do not assume every API field has a snake_case SDK parameter.
+
 ## Tool Optimization
 
 Distinct from prompt optimization, Promptic also optimizes the **tool descriptions** an LLM chooses between so the model picks the right tool for a query (task type `toolSelection`). It's a separate optimizer: the input is a set of tool definitions and representative queries, and each iteration returns optimized descriptions in `toolDescriptions` plus `selectionSystemPrompt` when system-prompt optimization is enabled.
