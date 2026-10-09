@@ -325,6 +325,21 @@ not part of this workflow.
 
 Optimize prompts via experiments:
 
+Each prompt-optimization experiment uses **one managed dataset**, created with
+its experiment. Add all training/evaluation cases to the returned `datasetId`;
+do not create multiple standalone datasets and expect one experiment to train
+on them. Combine compatible sources into this dataset before starting.
+
+Prompts are templates: `{message}` inserts the value of the `message` key in a
+case's `inputPayload`. Include every input key at least once in the prompt.
+For multiple inputs, use a template such as
+`Subject: {subject}\nBody: {body}` and cases with both keys. Escape literal
+braces with `{{` and `}}` (for example JSON examples). Expected answers belong
+in `expectedPayload`, not in prompt input variables. Explicit `input_variables`
+can be supplied when creating an experiment; for an existing pending experiment,
+use `update_experiment(id, inputVariables=[{"name": "subject", "column": "subject"}, ...])`.
+The variable names must match the case input keys and prompt placeholders.
+
 ```python
 from promptic_sdk import PrompticClient
 
@@ -334,7 +349,8 @@ with PrompticClient() as client:
         ai_component_id="comp_...",
         target_model="gpt-4.1-nano",
         task_type="classification",  # or "textGeneration", "structuredOutput"
-        initial_prompt="Classify the following text into categories.",
+        initial_prompt="Classify this message into categories: {message}",
+        input_variables=[{"name": "message", "column": "message"}],
         optimizer="prompticV2",      # or "miproV2", "bootstrapFewShot"
     )
 
