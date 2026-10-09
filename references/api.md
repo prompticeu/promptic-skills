@@ -273,7 +273,7 @@ client.duplicate_experiment(
 ) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
 
-**Multi-message prompts (SDK 1.1.0):** `create_experiment` has no
+**Multi-message prompts:** `create_experiment` has no
 `prompt_format`/`initial_prompt_messages` arguments. Before starting the returned
 pending experiment, call:
 

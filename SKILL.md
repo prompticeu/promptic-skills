@@ -384,7 +384,7 @@ flatten a chat prompt into one string. `{var}` placeholders work inside message
 content and must match the case's `inputPayload` keys. Put expected answers in
 `expectedPayload`, not in a user or assistant message used as an input.
 
-SDK 1.1.0's `create_experiment` accepts `input_variables`, but **does not accept**
+The SDK's `create_experiment` accepts `input_variables`, but **does not accept**
 `prompt_format` or `initial_prompt_messages`. Create the pending experiment,
 then set the message contract with `update_experiment` using the API's camelCase
 field names. Do this before starting the experiment; updates after it starts
