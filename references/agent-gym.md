@@ -282,6 +282,18 @@ writes, and requests scoring for the existing run. Reuse stable idempotency
 keys when retrying the same session creation or scoring submission; using the
 same key for different content returns a conflict.
 
+To populate the platform's Cost & Performance comparison, give each prediction
+model-usage evidence. Either set `AgentGymCaseResult.model_usage` (equivalently
+the prediction's `model_usage`) to `{"version": 1, "complete": True, "calls":
+[...]}`, where each call reports its `provider`, `model`, and
+`input_tokens`/`output_tokens` (which already include their cache and reasoning
+subsets) and a unique `call_id`; or link a dedicated execution trace per
+prediction whose model spans carry provider, model, and token counts. An
+explicit `model_usage` report takes precedence over linked traces. Set
+`complete` to `False` when any calls or usage are missing, and include every
+call made for the prediction, including retries and subagents. For a reported
+cost, add `cost_usd` with `cost_basis` and `pricing_basis`.
+
 ## Inspect and compare results
 
 ```bash
