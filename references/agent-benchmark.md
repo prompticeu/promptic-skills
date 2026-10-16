@@ -160,7 +160,8 @@ plan with a known-good and deliberately weak variant before relying on its
 leaderboard ranking.
 
 Classification and field-level evaluator weights control their contribution to
-the combined score. Verifier metrics instead define their own weight (up to 10)
+the variant's canonical overall score (the weighted average of its available
+evaluator aggregates). Verifier metrics instead define their own weight (up to 10)
 and optional normalized threshold directly on `VerifierMetric`; the SDK creates
 the platform binding internally.
 Verifier evaluators do not have an overall weight. Leave
