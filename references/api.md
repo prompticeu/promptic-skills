@@ -399,6 +399,15 @@ tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0`
 instead of ~`0.55`. Re-running older experiments may show lower scores on
 string-heavy schemas with unrelated content.
 
+Embedding-based comparison (`embedding`, `array_similarity`, and the default
+scoring for unconfigured string fields and string/object arrays) runs on a
+platform-managed embedding model. It requires platform model access and is
+recorded as managed model usage even when generation or judge models use a
+BYOK/custom provider, so an evaluator that uses only embedding comparison still
+passes through the platform billing gate. If the embedding model is
+unavailable, the affected comparison is reported as a failed evaluation rather
+than silently falling back to exact string match.
+
 ### `toolSelection` evaluator
 
 The `toolSelection` evaluator is **attached automatically when a tool-selection experiment is created** (by `create_tool_selection_experiment(...)` or the dashboard) — it is not user-creatable via `create_evaluators(...)`. It is fixed to a `[0.0, 1.0]` scale, scores `1.0` when the predicted tool name matches `expected` (case-insensitive) and `0.0` otherwise, and takes no `config` keys.

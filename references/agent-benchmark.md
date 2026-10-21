@@ -206,6 +206,14 @@ behavior = ExpectedBehaviorJudge()
 `array_exact`, `array_similarity`, and `array_judge`. The former `strategy` and
 `array_strategy` keywords are not accepted by the current SDK.
 
+Embedding-based comparison (`embedding`, `array_similarity`, and the default
+scoring for unconfigured string fields and string/object arrays) runs on a
+platform-managed embedding model: it requires platform model access and counts
+as managed model usage even under BYOK, so a `FieldLevelJudge` that uses only
+embedding comparison still goes through the platform billing gate. If the
+embedding model is unavailable, the affected comparison is reported as a failed
+evaluation rather than silently falling back to exact string match.
+
 Pass one or more of these objects in `evaluators=[...]`. For
 `FieldLevelJudge`, omitted Output-schema fields do not receive an explicit
 override; use `include=False` when a listed field is intentionally excluded.
