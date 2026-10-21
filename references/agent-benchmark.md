@@ -171,7 +171,7 @@ reviewed cases before trusting leaderboard order.
 Verifier evidence can include case input, submitted output (including generated
 files), expected behavior, expected output, and execution trace. Select only
 what each metric needs. The platform owns shell and image-inspection tools;
-they are not evaluator settings. The default investigation budget is 20 steps.
+they are not evaluator settings. The default investigation budget is 50 steps.
 The Expected Behavior Judge always uses case input, Expected Behavior, and the
 execution trace with its fixed `behavior_compliance` metric.
 

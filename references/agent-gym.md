@@ -307,7 +307,9 @@ and `insufficient_evidence` results indicate missing score coverage even when
 other metrics succeeded. Verifier metrics appear independently and expose
 `source_evaluator_id` plus `metric_key`; do not parse the opaque result ID.
 Per-field means use a `succeeded_only` basis and therefore need not reconcile
-with an official aggregate that zero-fills failed cases.
+with an official aggregate that zero-fills unscored slots, prediction failures,
+and skipped or insufficient-evidence results while excluding failed judgments,
+which are surfaced as coverage warnings instead.
 
 ## Promote the chosen variant
 
