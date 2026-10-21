@@ -177,7 +177,7 @@ state when a leaderboard run exists.
 
 Verifier authoring uses
 `VerifierMetric(key, name, instructions, weight=1, threshold=None)`,
-`EvidencePolicy`, and `InvestigationBudget(max_steps=20)`. The SDK translates
+`EvidencePolicy`, and `InvestigationBudget(max_steps=50)`. The SDK translates
 inline metric scoring into the API's separate binding map. Verifier metrics
 aggregate independently, so `VerifierAgent` has no evaluator-level weight.
 The lower-level `MetricBinding` mapping remains available for compatibility but
