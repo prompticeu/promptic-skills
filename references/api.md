@@ -196,9 +196,16 @@ client.download_prediction_artifact(artifact, destination, *, overwrite=False)
 client.compare_runs(benchmark_id, *, parent_run_id, candidate_run_id)
 client.get_submission_status(benchmark_id, submission_id)
 client.wait_for_submission(benchmark_id, submission_id, *, max_wait=600, poll_interval=2)
+client.reevaluate_run(benchmark_id, run_id)
 client.retry_scoring(benchmark_id, run_id)
 client.cancel_submission(benchmark_id, submission_id)
 ```
+
+Both re-score saved predictions without executing the Agent again.
+`reevaluate_run(...)` creates a new evaluation with the active evaluator
+revision and requires an execution-current run. `retry_scoring(...)` recovers
+blocked or interrupted scoring for an external run using its original pinned
+evaluator revision and is unavailable once official scoring has succeeded.
 
 `get_run_results()` includes `score_status_counts`. Verifier evaluator results
 include `source_evaluator_id` and `metric_key`; per-field result maps declare
