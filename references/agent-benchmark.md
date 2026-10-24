@@ -211,6 +211,20 @@ Pass one or more of these objects in `evaluators=[...]`. For
 override; use `include=False` when a listed field is intentionally excluded.
 Use dotted field paths for nested fields.
 
+A plan may include multiple `FieldLevelJudge` evaluators, each scoring
+different fields or applying different methods, instructions, models, and
+weights — for example, one judge for answer quality and another for
+supporting-page accuracy. Each judge keeps its own identity and contributes
+independently to the combined score. `ClassificationF1`, `VerifierAgent`, and
+`ExpectedBehaviorJudge` remain limited to one evaluator each, including disabled
+entries. Every evaluator accepts an optional `id`; explicit IDs must be
+non-empty and unique across the whole collection, and omitted IDs are generated
+automatically. Repeating a singleton kind or reusing an explicit ID is rejected
+before anything is saved: the SDK and CLI validate the collection locally and
+the API returns HTTP 400 with error code `duplicate_evaluator_kind` or
+`duplicate_evaluator_id`, naming the conflicting index. The whole create or
+update request is rejected, not silently deduplicated.
+
 ## Configure a benchmark with Python
 
 With an AI Application-scoped API key, `AgentGymClient()` can infer the AI
