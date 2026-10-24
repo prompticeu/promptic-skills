@@ -211,15 +211,19 @@ Pass one or more of these objects in `evaluators=[...]`. For
 override; use `include=False` when a listed field is intentionally excluded.
 Use dotted field paths for nested fields.
 
-A plan accepts at most one evaluator of each kind, including disabled entries;
-distinct names or IDs do not add a second slot. To evaluate both an answer and
-its supporting pages, configure both fields in one `FieldLevelJudge(fields={...})`
-with their own methods, instructions, and weights rather than adding a second
-judge. Duplicate kinds are rejected before anything is saved: the SDK and CLI
-validate the collection locally and the API returns HTTP 400 with error code
-`duplicate_evaluator_kind`, naming the conflicting index and the first slot that
-uses the kind. The whole create or update request is rejected, not silently
-deduplicated.
+A plan may include multiple `FieldLevelJudge` evaluators, each scoring
+different fields or applying different methods, instructions, models, and
+weights — for example, one judge for answer quality and another for
+supporting-page accuracy. Each judge keeps its own identity and contributes
+independently to the combined score. `ClassificationF1`, `VerifierAgent`, and
+`ExpectedBehaviorJudge` remain limited to one evaluator each, including disabled
+entries. Every evaluator accepts an optional `id`; explicit IDs must be
+non-empty and unique across the whole collection, and omitted IDs are generated
+automatically. Repeating a singleton kind or reusing an explicit ID is rejected
+before anything is saved: the SDK and CLI validate the collection locally and
+the API returns HTTP 400 with error code `duplicate_evaluator_kind` or
+`duplicate_evaluator_id`, naming the conflicting index. The whole create or
+update request is rejected, not silently deduplicated.
 
 ## Configure a benchmark with Python
 
