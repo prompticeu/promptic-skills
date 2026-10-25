@@ -173,7 +173,11 @@ files), expected behavior, expected output, and execution trace. Select only
 what each metric needs. The platform owns shell and image-inspection tools;
 they are not evaluator settings. The default investigation budget is 20 steps.
 The Expected Behavior Judge always uses case input, Expected Behavior, and the
-execution trace with its fixed `behavior_compliance` metric.
+execution trace with its fixed `behavior_compliance` metric. It requires a usable
+execution trace for every case it evaluates: a prediction that submits no usable
+trace (a trace header with no spans or diagnostics-only files do not count) fails
+its precondition and is reported as not evaluated for this preset rather than
+scored zero.
 
 Common typed configurations look like this:
 
