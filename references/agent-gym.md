@@ -284,20 +284,11 @@ same key for different content returns a conflict.
 
 ## Inspect and compare results
 
-```bash
-promptic agent-gym results "$BENCHMARK_ID" "$RUN_ID"
-promptic agent-gym case-results "$BENCHMARK_ID" "$RUN_ID" --sort score --limit 5
-promptic agent-gym case-result "$BENCHMARK_ID" "$RUN_ID" 42
-promptic agent-gym artifact-download \
-  "$BENCHMARK_ID" "$RUN_ID" 42 0 --output review/report.pdf
-promptic agent-gym compare-runs \
-  "$BENCHMARK_ID" "$BASELINE_RUN_ID" "$CANDIDATE_RUN_ID"
-promptic traces get <linked-trace-id> --json
-```
-
-The SDK equivalents are `get_run_results()`, `list_case_results()`,
-`iter_case_results()`, `get_case_result()`, `download_prediction_artifact()`,
-and `compare_runs()`. Review weak and failed cases, judge reasoning, generated
+The Agent Gym CLI does not yet expose run-result or comparison commands. Use
+the SDK's `get_run_results()`, `list_case_results()`, `iter_case_results()`,
+`get_case_result()`, `download_prediction_artifact()`, and `compare_runs()`.
+Use `promptic traces get <linked-trace-id> --json` for a linked trace. Review
+weak and failed cases, judge reasoning, generated
 files, trace evidence, latency, and token usage; do not choose a variant from
 the mean score alone. Paired comparison requires compatible runs from the same
 immutable benchmark and evaluator setup.
@@ -323,12 +314,9 @@ the baseline for the next architecture change.
 
 ## Monitor and recover
 
-```bash
-promptic agent-gym submission-status "$BENCHMARK_ID" "$SUBMISSION_ID"
-promptic agent-gym submission-wait "$BENCHMARK_ID" "$SUBMISSION_ID" --max-wait 600
-promptic agent-gym retry-scoring "$BENCHMARK_ID" "$RUN_ID"
-promptic agent-gym submission-cancel "$BENCHMARK_ID" "$SUBMISSION_ID" --yes
-```
+The CLI does not yet expose submission status, wait, retry, or cancellation
+commands. Use the SDK's `get_submission_status()`, `wait_for_submission()`,
+`retry_scoring()`, and `cancel_submission()` methods.
 
 - Retry scoring only after a recoverable scoring-dispatch failure. It reuses
   the existing immutable predictions and does not rerun the Agent or create a
