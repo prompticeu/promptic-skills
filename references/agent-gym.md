@@ -231,6 +231,13 @@ hash, and a useful architecture description when available so a winning run is
 reproducible. For a child variant, provide parent identity plus a rationale and
 the intended behavioral effect.
 
+A variant name and version are scoped to one Agent Optimization task. Within
+that task they always identify the same architecture and source provenance, so
+reuse them for another run or benchmark version when the provenance is
+unchanged. Two independent Agents in the same AI Application may use the same
+name and version. Submitting the same task-scoped name and version with
+different provenance is rejected with a conflict.
+
 ### CLI
 
 ```bash
@@ -333,6 +340,10 @@ promptic agent-gym submission-cancel "$BENCHMARK_ID" "$SUBMISSION_ID" --yes
 - Retry scoring only after a recoverable scoring-dispatch failure. It reuses
   the existing immutable predictions and does not rerun the Agent or create a
   replacement leaderboard entry.
+- A recoverable billing outcome preserves the uploaded predictions and surfaces
+  the run as a retryable failure. An ambiguous authorization failure resumes the
+  same authorization attempt on an identical retry; a definite billing denial
+  requires correcting billing before retrying scoring.
 - Rerunning the Agent creates a new empty submission session.
 - Cancel only an unsubmitted session that should accept no more predictions.
 - If required evaluator evidence is missing or evaluation fails, inspect the
