@@ -204,11 +204,18 @@ behavior = ExpectedBehaviorJudge()
 `FieldScoring` has one comparison selector, `method`. Its scalar values are
 `exact`, `embedding`, `contains`, and `judge`; its array values are
 `array_exact`, `array_similarity`, and `array_judge`. The former `strategy` and
-`array_strategy` keywords are not accepted by the current SDK.
+`array_strategy` keywords are not accepted by the current SDK. `judge` compares
+the whole field value, so it also handles a mixed scalar/container union such as
+`string | number | boolean | array | null` (use `judge_instructions` to define
+equivalence for ranges, tolerances, or formatting); a field whose non-null type
+is always an array uses `array_judge` instead.
 
 Pass one or more of these objects in `evaluators=[...]`. For
 `FieldLevelJudge`, omitted Output-schema fields do not receive an explicit
-override; use `include=False` when a listed field is intentionally excluded.
+override; use `include=False` when a listed field is intentionally excluded. An
+excluded field keeps its `method` (the default is `exact`) and skips the
+schema-type compatibility check, so `FieldScoring(include=False)` is valid for a
+field of any type; compatibility is enforced again if the field is re-included.
 Use dotted field paths for nested fields.
 
 ## Configure a benchmark with Python
