@@ -309,6 +309,13 @@ other metrics succeeded. Verifier metrics appear independently and expose
 Per-field means use a `succeeded_only` basis and therefore need not reconcile
 with an official aggregate that zero-fills failed cases.
 
+When a run could not be scored, `get_run_results()` returns a `failure` object
+with a stable `code` and readable `message` (for example,
+`verifier_tool_call_budget` when the verifier hit its tool-call limit). The same
+summary surfaces as `run_failure` on case-result responses and `run["failure"]`
+on submission status. Read that stable `code` to explain a failure; these fields
+never contain raw provider or verifier exception text.
+
 ## Promote the chosen variant
 
 Before choosing a winner, confirm that its aggregate gain is supported by
@@ -336,7 +343,10 @@ promptic agent-gym submission-cancel "$BENCHMARK_ID" "$SUBMISSION_ID" --yes
 - Rerunning the Agent creates a new empty submission session.
 - Cancel only an unsubmitted session that should accept no more predictions.
 - If required evaluator evidence is missing or evaluation fails, inspect the
-  run's eligibility state rather than treating a partial score as official.
+  run's eligibility state and its `failure` code rather than treating a partial
+  score as official. A `verifier_tool_call_budget` or `verifier_timeout` code
+  means the verifier stopped before scoring finished; re-evaluate once the
+  underlying cause is addressed.
 
 ## Completion checklist
 
