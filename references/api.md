@@ -206,6 +206,7 @@ responses expose the scope as `aiApplicationId`.
 client.list_components() -> ComponentList
 client.create_component(name: str, *, description=None) -> ComponentCreated
 client.get_component(component_id: str) -> Component
+client.update_component_rules(component_id: str, brief: OptimizationBrief, *, expected_version: int) -> Component
 client.delete_component(component_id: str) -> None
 ```
 
@@ -225,6 +226,7 @@ client.create_experiment(
     optimizer="prompticV2",          # "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"
     hyperparameters=None,            # {"epochs": int, "trainSplitRatio": float, "numFewShots": int, "enableCot": bool}
     initial_prediction_model_schema=None,
+    optimization_guidance=None,
 ) -> Experiment
 client.create_tool_selection_experiment(
     ai_component_id: str,
@@ -235,13 +237,14 @@ client.create_tool_selection_experiment(
     tool_source="manual",            # "manual" | "mcp"
     system_prompt=None,
     optimize_system_prompt=False,
+    optimization_guidance=None,
     epochs=None,
     train_split_ratio=None,          # training fraction in [0.5, 0.9]
     name=None,
     description=None,
 ) -> Experiment
 client.get_experiment(experiment_id: str) -> Experiment
-client.update_experiment(experiment_id: str, **updates) -> Experiment
+client.update_experiment(experiment_id: str, *, optimization_guidance=None, **updates) -> Experiment
 client.delete_experiment(experiment_id: str) -> None
 client.start_experiment(experiment_id: str) -> ExperimentStarted
 client.duplicate_experiment(
@@ -395,3 +398,5 @@ client.delete_dataset_case(component_id: str, dataset_id: str, case_id: int) -> 
 ```
 
 `Dataset` reports a `caseCount`; `DatasetWithCases` includes the full `cases` list.
+
+For guidance shapes, limits, exact locks, shared rules and version conflicts, see [optimization-guidance.md](optimization-guidance.md).
