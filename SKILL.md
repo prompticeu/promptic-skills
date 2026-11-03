@@ -47,6 +47,12 @@ export PROMPTIC_API_KEY="ptc_..."
 
 Config resolution: explicit args > env vars (`PROMPTIC_API_KEY`, `PROMPTIC_ENDPOINT`) > `~/.promptic/config.toml`.
 
+For Agent Optimization benchmark authoring, an AI Application-scoped API key
+selects the AI Application automatically. Login access tokens need an explicit
+`ai_application_id` or `PROMPTIC_AI_APPLICATION_ID`. See
+[references/agent-benchmark.md](references/agent-benchmark.md) for the authoring
+workflow. This inference requires the SDK and API release that supports it.
+
 ## Tracing
 
 Call `promptic_sdk.init()` once at startup. All LLM calls from installed providers are auto-instrumented via OpenTelemetry.
@@ -310,12 +316,29 @@ existing-benchmark discovery, callback contract, resumable sessions, durable
 uploads, scoring submission, result inspection, comparison, and recovery. For
 exact public signatures, also read the Agent Optimization section of
 [references/api.md](references/api.md).
+For `FieldScoring`, select scalar or array behavior with the single `method=`
+argument. Do not use the retired `strategy` or `array_strategy` keywords.
 Do not add or describe Auto Engineer or autonomous optimization loops; they are
 not part of this workflow.
 
 ## Prompt Optimization Workflow
 
 Optimize prompts via experiments:
+
+Each prompt-optimization experiment uses **one managed dataset**, created with
+its experiment. Add all training/evaluation cases to the returned `datasetId`;
+do not create multiple standalone datasets and expect one experiment to train
+on them. Combine compatible sources into this dataset before starting.
+
+Prompts are templates: `{message}` inserts the value of the `message` key in a
+case's `inputPayload`. Include every input key at least once in the prompt.
+For multiple inputs, use a template such as
+`Subject: {subject}\nBody: {body}` and cases with both keys. Escape literal
+braces with `{{` and `}}` (for example JSON examples). Expected answers belong
+in `expectedPayload`, not in prompt input variables. Explicit `input_variables`
+can be supplied when creating an experiment; for an existing pending experiment,
+use `update_experiment(id, inputVariables=[{"name": "subject", "column": "subject"}, ...])`.
+The variable names must match the case input keys and prompt placeholders.
 
 ```python
 from promptic_sdk import PrompticClient
@@ -326,7 +349,8 @@ with PrompticClient() as client:
         ai_component_id="comp_...",
         target_model="gpt-4.1-nano",
         task_type="classification",  # or "textGeneration", "structuredOutput"
-        initial_prompt="Classify the following text into categories.",
+        initial_prompt="Classify this message into categories: {message}",
+        input_variables=[{"name": "message", "column": "message"}],
         optimizer="prompticV2",      # or "miproV2", "bootstrapFewShot"
     )
 
@@ -358,6 +382,24 @@ with PrompticClient() as client:
 When the user wants to focus optimization, preserve prompt text, or supply context, use `optimization_guidance` on experiment create/update. Default to experiment scope; use `update_component_rules` only when the user wants rules across experiments. Keep existing local locks/rules when replacing only part of a brief. Rules guide critiques and prompt edits; exact locks are validated. Do not claim that a focus rule changes scoring weights or selects targeted cases.
 
 Read [references/optimization-guidance.md](references/optimization-guidance.md) for the SDK types, JSON shape, CLI flags, prompt-lock semantics, and component version-conflict handling. These methods require an SDK/server release with guidance support; if the installed SDK lacks the parameter or method, use a compatible release rather than inventing a signature.
+
+### Cancel an experiment
+
+When the user asks to stop a prompt/tool optimization run, call
+`client.cancel_experiment(experiment_id)` (or await the async equivalent), or use
+`promptic experiments cancel <id> --yes --json` after user authorization.
+This requires the SDK/CLI and server release that includes experiment cancellation;
+older SDKs do not expose the method or command.
+
+`{"status": "canceling"}` acknowledges the request, not a stopped worker. Read
+`get_experiment(id)["experimentStatus"]` until terminal, using bounded polling if
+waiting was requested. Only `canceled` confirms cancellation; `completed` or
+`failed` must be reported as their actual outcome. Ownerless pending/scheduled
+runs can return `canceled` immediately. In-flight work may finish and incur usage
+charges; saved results remain. Repeated cancellation requests are idempotent.
+Do not use deletion, Ctrl-C, or a client timeout as a substitute for remote
+cancellation. Active runs must stop before deletion. See
+[the API cancellation contract](references/api.md#cancel-an-experiment) for errors.
 
 ## Tool Optimization
 
@@ -418,6 +460,7 @@ promptic experiments get <id>       # Get experiment details
 promptic experiments update <id>    # Update a pending experiment
 promptic experiments delete <id>    # Delete an experiment
 promptic experiments start <id>     # Start optimization
+promptic experiments cancel <id> [--yes] [--json] # Request cancellation; does not wait
 promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (dataset cases + evaluators)
 promptic experiments continue <id> [--start]                 # Clone, seed initial prompt from source's best iteration
 
@@ -451,7 +494,7 @@ promptic datasets delete <ds-id> --component <id>  # Delete dataset
 ## Key Types
 
 Enums (Literal types):
-- `ExperimentStatus`: `"pending" | "scheduled" | "running" | "completed" | "failed"`
+- `ExperimentStatus`: `"pending" | "scheduled" | "running" | "canceling" | "canceled" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` experiments are created with the dedicated `create_tool_selection_experiment(...)` method, **not** by passing a `task_type` to `create_experiment(...)`; the value is also surfaced by `get_experiment(...)` / `list_experiments(...)` for existing tool-selection / MCP-optimization experiments.
 - `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.

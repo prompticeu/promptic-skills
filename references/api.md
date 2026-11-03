@@ -41,6 +41,11 @@ back to server-side base64 upload for compatibility.
 
 The user-facing feature is Agent Optimization. The Python SDK retains the
 `AgentGymClient` name and the CLI uses the `agent-gym` command group.
+For benchmark creation and listing, an AI Application-scoped API key supplies
+the application ID automatically. Login access tokens require
+`ai_application_id` or `PROMPTIC_AI_APPLICATION_ID`; `workspace_id` remains a
+deprecated compatibility alias. This behavior requires a compatible SDK and
+API release.
 
 ```python
 AgentGymClient(
@@ -49,6 +54,21 @@ AgentGymClient(
     api_key: str | None = None,
     access_token: str | None = None,
     ai_application_id: str | None = None,
+)
+
+FieldScoring(
+    method: Literal[
+        "exact",
+        "embedding",
+        "contains",
+        "judge",
+        "array_exact",
+        "array_similarity",
+        "array_judge",
+    ] = "exact",
+    include: bool = True,
+    judge_instructions: str | None = None,
+    weight: float = 1.0,
 )
 
 client.download_dataset(
@@ -227,6 +247,7 @@ client.create_experiment(
     hyperparameters=None,            # {"epochs": int, "trainSplitRatio": float, "numFewShots": int, "enableCot": bool}
     initial_prediction_model_schema=None,
     optimization_guidance=None,
+    input_variables=None,              # [{"name": "message", "column": "message"}]
 ) -> Experiment
 client.create_tool_selection_experiment(
     ai_component_id: str,
@@ -239,7 +260,7 @@ client.create_tool_selection_experiment(
     optimize_system_prompt=False,
     optimization_guidance=None,
     epochs=None,
-    train_split_ratio=None,          # training fraction in [0.5, 0.9]
+    train_split_ratio=None,          # training fraction in [0.3, 0.9]
     name=None,
     description=None,
 ) -> Experiment
@@ -247,6 +268,7 @@ client.get_experiment(experiment_id: str) -> Experiment
 client.update_experiment(experiment_id: str, *, optimization_guidance=None, **updates) -> Experiment
 client.delete_experiment(experiment_id: str) -> None
 client.start_experiment(experiment_id: str) -> ExperimentStarted
+client.cancel_experiment(experiment_id: str) -> ExperimentCancellation
 client.duplicate_experiment(
     experiment_id: str,
     *,
@@ -266,6 +288,34 @@ The platform also supports `toolSelection` for optimizing tool descriptions
 from MCP or manually supplied definitions. Do not pass it as `task_type` to
 `create_experiment(...)`; use `create_tool_selection_experiment(...)` instead.
 Returned experiments may include `systemPrompt` and `optimizeSystemPrompt`.
+
+### Cancel an experiment
+
+Requires an SDK and server release with experiment-cancellation support. Both
+sync and async clients expose `cancel_experiment(experiment_id)`, which sends
+`POST /api/v1/experiments/{experimentId}/cancel` without a request body.
+
+- `{"status": "canceled"}`: cancellation is complete, including an ownerless
+  pending/scheduled run canceled before work starts.
+- `{"status": "canceling"}`: the request was accepted; the worker still needs to
+  stop at a safe boundary. In-flight work may finish and incur usage charges.
+
+The method does not wait. If the user needs confirmation that work has stopped,
+poll `get_experiment` with a bounded timeout and reasonable interval until
+`experimentStatus` is `canceled`, `completed`, or `failed`. Report the actual
+outcome; a polling timeout is not proof of cancellation. Saved results remain.
+Repeated requests for canceling/canceled experiments are idempotent.
+
+Errors preserve `PrompticAPIError.status_code`: `401` for authentication, `404`
+for an unknown experiment or one outside the selected AI Application, and `409`
+for an experiment that cannot be canceled (such as completed/failed).
+
+CLI: `promptic experiments cancel <id>` asks for confirmation; use `--yes --json`
+for an already-authorized scripted request. Exit code zero means the request
+succeeded, not necessarily that the worker has stopped. Check
+`promptic experiments get <id> --json` for the current status. Stopping the local
+client or pressing Ctrl-C does not cancel remote work. Do not use deletion as a
+substitute: cancel and confirm a terminal status before deleting an active run.
 
 ## Evaluators
 
@@ -328,15 +378,29 @@ Supported `config` keys for the `structuredOutput` type:
 - `fields` (dict, optional): per-field overrides keyed by dotted JSON path. Each entry accepts:
   - `include` (bool, default `true`)
   - `weight` (float, default `1.0`)
-  - `strategy` (string): scalar comparison — `"exact" | "embedding" | "contains" | "judge"`. The `judge` value enables LLM-as-judge per-pair scoring on string fields and surfaces reasoning in the case-details sheet.
-  - `array_strategy` (string): array aggregation — `"exact" | "similarity" | "judge"`. The `judge` value runs a single whole-array LLM call returning F1-compatible counts; arrays exceeding 50 items per side fall back to `similarity` with a warning marker.
-  - `judge_instructions` (string, optional): field-specific guidance appended to the built-in *"do these convey the same essential information?"* rubric for this field only. Valid only when this field's `strategy` or `array_strategy` is `judge`; setting it on a non-judged field is rejected. Omit to use the built-in rubric on its own — selecting `judge` never requires instructions.
+  - `method` (string): the single comparison selector. Scalar methods are
+    `"exact" | "embedding" | "contains" | "judge"`; array methods are
+    `"array_exact" | "array_similarity" | "array_judge"`. `judge` enables
+    LLM-as-judge per-pair scoring on string fields. `array_judge` runs a single
+    whole-array LLM call returning F1-compatible counts; arrays exceeding 50
+    items per side fall back to array similarity with a warning marker.
+  - `judge_instructions` (string, optional): field-specific guidance appended
+    to the built-in *"do these convey the same essential information?"* rubric
+    for this field only. Valid only when `method` is `"judge"` or
+    `"array_judge"`; setting it for another method is rejected. Omit to use the
+    built-in rubric on its own — selecting a judge method never requires
+    instructions.
 
-  Whether a field counts as required is read from the JSON schema's `required` array, not from this dict — `FieldConfig` rejects unknown keys.
+  Whether a field counts as required is read from the JSON schema's `required`
+  array, not from this dict. The current SDK rejects the former `strategy` and
+  `array_strategy` keys; use `method` instead.
 
 There is no evaluator-level `judge_instructions`; guidance lives on each judged field, so different fields can carry different notes.
 
-The `embedding` strategy applies a calibrated cosine-similarity floor (`0.15`, tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0` instead of ~`0.55`. Re-running older experiments may show lower scores on string-heavy schemas with unrelated content.
+The `embedding` method applies a calibrated cosine-similarity floor (`0.15`,
+tuned for `text-embedding-3-small`) so unrelated string pairs score `0.0`
+instead of ~`0.55`. Re-running older experiments may show lower scores on
+string-heavy schemas with unrelated content.
 
 ### `toolSelection` evaluator
 
@@ -349,7 +413,7 @@ In addition to prompt optimization, Promptic can optimize the **tool description
 - **Tools** (`tools`): a list of tool definitions, each `{"name", "description"}` with an optional `input_schema` (also accepted as `inputSchema`); at least one, tool names must be unique and cannot use a reserved no-tool alias. In the dashboard, definitions can also be imported from an MCP server URL (Bearer-token or OAuth 2.0 auth) or pasted as a JSON array; Anthropic-style (`{name, description, input_schema}`), OpenAI-function-calling-style (`{type, function: {name, description, parameters}}`), and plain (`{name, description}`) shapes are all normalized. `tool_source` records the provenance as `"manual"` (default) or `"mcp"`.
 - **Test cases** (`test_cases`): each is `{"query", "expected_tool"}` — the user query plus the supplied tool name that should fire. Use `""` as the canonical value for "no tool should be called". The API also accepts `"none"`, `"no tool"`, `"no-tool"`, `"no_tool"`, `"no tool call"`, `"no-tool-call"`, `"no_tool_call"`, `"no tools"`, `"no_tools"`, `"n/a"`, `"na"`, `"-"`, and `"__NO_TOOL__"`; all normalize to the same no-tool expectation. At least one case is required.
 - **Optional system prompt**: pass `system_prompt` to use as fixed context during evaluation. When `optimize_system_prompt=True`, the optimizer rewrites it alongside the tool descriptions. Read the best variant from `get_best_iteration(...)['selectionSystemPrompt']`; optimized descriptions are returned by the same iteration under `toolDescriptions`.
-- **Other options**: `target_model` (omit for the platform default), `epochs` (1–5), `train_split_ratio` (fraction assigned to training in `[0.5, 0.9]`; the remaining cases form the held-out evaluation split; omit to train and score on all cases), `name`, and `description`.
+- **Other options**: `target_model` (omit for the platform default), `epochs` (1–5), `train_split_ratio` (fraction assigned to training in `[0.3, 0.9]`; the remaining cases form the held-out evaluation split; omit to train and score on all cases), `name`, and `description`.
 
 Existing tool-selection experiments, dataset cases, iterations, and evaluators
 come back through the normal SDK methods with `taskType: "toolSelection"`.
