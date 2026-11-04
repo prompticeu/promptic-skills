@@ -379,9 +379,9 @@ with PrompticClient() as client:
 
 ### Guide an experiment
 
-When the user wants to focus optimization, preserve prompt text, or supply context, use `optimization_guidance` on experiment create/update. Default to experiment scope; use `update_component_rules` only when the user wants rules across experiments. Keep existing local locks/rules when replacing only part of a brief. Rules guide critiques and prompt edits; exact locks are validated. Do not claim that a focus rule changes scoring weights or selects targeted cases.
+When the user wants to focus optimization or supply context, use `optimization_guidance` on experiment create/update. Default to experiment scope; use `update_component_rules` only when the user wants rules across experiments. Keep existing local rules when replacing only part of a brief. Rules guide critiques and prompt edits. Do not claim that a focus rule changes scoring weights or selects targeted cases.
 
-Read [references/optimization-guidance.md](references/optimization-guidance.md) for the SDK types, JSON shape, CLI flags, prompt-lock semantics, and component version-conflict handling. These methods require an SDK/server release with guidance support; if the installed SDK lacks the parameter or method, use a compatible release rather than inventing a signature.
+Read [references/optimization-guidance.md](references/optimization-guidance.md) for the SDK types, JSON shape, CLI flags, rule limits and component version-conflict handling. These methods require an SDK/server release with guidance support; if the installed SDK lacks the parameter or method, use a compatible release rather than inventing a signature.
 
 ### Cancel an experiment
 

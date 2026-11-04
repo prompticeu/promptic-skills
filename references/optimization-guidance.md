@@ -14,7 +14,6 @@ from promptic_sdk import PrompticClient, OptimizationBrief
 
 brief: OptimizationBrief = {
     "rules": ["Focus on confusion between **X** and **Y**. Preserve other labels."],
-    "lockedPassages": [{"messageIndex": 0, "text": "Return one label."}],
 }
 with PrompticClient() as client:
     experiment = client.create_experiment(
@@ -24,15 +23,14 @@ with PrompticClient() as client:
         initial_prompt="Return one label. Classify {input}",
         optimization_guidance=brief,
     )
-    # Editing guidance replaces the experiment's local rules and locks.
+    # Editing guidance replaces the experiment's local rules.
     client.update_experiment(experiment["id"], optimization_guidance=brief)
-    # Pass {} to remove local rules and locks; inherited component rules still apply.
+    # Pass {} to remove local rules; inherited component rules still apply.
     client.update_experiment(experiment["id"], optimization_guidance={})
 ```
 
 `optimization_guidance` is also accepted by `create_tool_selection_experiment`.
-For tool selection, locks refer to the system prompt as message index 0; preserve
-its exact whitespace. To optimize that prompt, enable `optimize_system_prompt`.
+To optimize the tool-selection system prompt, enable `optimize_system_prompt`.
 
 ### Rules across experiments
 
@@ -53,31 +51,24 @@ retrying. Pass an empty brief to clear shared rules. Component rules are capture
 when scheduling a run; completed runs retain their saved rules. Experiment rules
 apply alongside inherited component rules and cannot override them.
 
-### Exact prompt locks and response types
+### Guidance types and limits
 
-The exported types are `OptimizationBrief`, `LockedPromptPassage`,
-`ComponentOptimizationRules`, and `OptimizationGuidance`. Fields inside these
-dictionaries use API camelCase, including `lockedPassages` and `messageIndex`.
+The exported types are `OptimizationBrief`, `ComponentOptimizationRules`, and
+`OptimizationGuidance`. Fields inside these dictionaries use API camelCase.
 
-`lockedPassages` preserve literal text in its original message position and role
-through optimizer edits. `messageIndex` is zero-based. Set `entireMessage: True`
-to fix a complete message; for a single-message prompt, include every required
-input placeholder before fixing the entire message. Locks are enforced before
-candidate evaluation. Text rules are instructions, not equivalent hard validators.
-
-Each scope permits up to 50 nonempty rules of 12,000 characters each and up to 20
-locks of 12,000 characters each. To change only one part of a brief, retain the
-other local rules and locks. `Experiment.optimizationGuidance` includes the saved
-`contractVersion` and `componentRules`; those fields are server-managed response
-metadata, not client overrides. `Component.optimizationRules` contains the current
-shared rules (or null when unset).
+Each scope permits up to 50 nonempty rules of 12,000 characters each. To change
+only one part of a brief, retain the other local rules.
+`Experiment.optimizationGuidance` includes the saved `contractVersion` and
+`componentRules`; those fields are server-managed response metadata, not client
+overrides. `Component.optimizationRules` contains the current shared rules
+(or null when unset).
 
 ### CLI
 
 Save the brief as a JSON object, for example `guidance.json`:
 
 ```json
-{"rules": ["Focus on confusion between labels X and Y."], "lockedPassages": []}
+{"rules": ["Focus on confusion between labels X and Y."]}
 ```
 
 ```bash
