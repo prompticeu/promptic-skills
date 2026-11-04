@@ -463,4 +463,4 @@ client.delete_dataset_case(component_id: str, dataset_id: str, case_id: int) -> 
 
 `Dataset` reports a `caseCount`; `DatasetWithCases` includes the full `cases` list.
 
-For guidance shapes, limits, exact locks, shared rules and version conflicts, see [optimization-guidance.md](optimization-guidance.md).
+For guidance shapes, limits, shared rules and version conflicts, see [optimization-guidance.md](optimization-guidance.md).
