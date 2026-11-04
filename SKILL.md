@@ -377,6 +377,12 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
+### Guide an experiment
+
+When the user wants to focus optimization or supply context, use `optimization_guidance` on experiment create/update. Default to experiment scope; use `update_component_rules` only when the user wants rules across experiments. Keep existing local rules when replacing only part of a brief. Rules guide critiques and prompt edits. Do not claim that a focus rule changes scoring weights or selects targeted cases.
+
+Read [references/optimization-guidance.md](references/optimization-guidance.md) for the SDK types, JSON shape, CLI flags, rule limits and component version-conflict handling. These methods require an SDK/server release with guidance support; if the installed SDK lacks the parameter or method, use a compatible release rather than inventing a signature.
+
 ### Cancel an experiment
 
 When the user asks to stop a prompt/tool optimization run, call
@@ -401,7 +407,7 @@ Distinct from prompt optimization, Promptic also optimizes the **tool descriptio
 
 Tool definitions come either from an MCP server URL (with Bearer-token or OAuth 2.0 auth) that Promptic auto-discovers, or from a JSON array pasted directly into the wizard (Anthropic `input_schema`, OpenAI `{type, function}`, or plain `{name, description}` shapes are all normalized). A tool-optimization experiment can also attach an optional `systemPrompt` (used as fixed context during evaluation); when the **"Also optimize the system prompt"** toggle is on, the optimizer rewrites that system prompt alongside the tool descriptions. Read both results from the best iteration as `selectionSystemPrompt` and `toolDescriptions`.
 
-Create one programmatically with `create_tool_selection_experiment(ai_component_id, *, tools, test_cases, target_model=None, tool_source="manual", system_prompt=None, optimize_system_prompt=False, epochs=None, train_split_ratio=None, name=None, description=None)`. It atomically creates the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment — call `start_experiment(...)` to run it. `tools` is a list of `{"name", "description", "input_schema"?}` and `test_cases` a list of `{"query", "expected_tool"}` (use `""`, or a supported no-tool alias, as `expected_tool` for queries that should call no tool). `tool_source` is `"manual"` (definitions supplied directly) or `"mcp"`. This is a dedicated method, so `toolSelection` is not a `task_type` you pass to `create_experiment(...)` and its evaluator is not created via `create_evaluators(...)`. Auto-discovering tools from an MCP server URL is a dashboard flow; the SDK takes the tool definitions directly.
+Create one programmatically with `create_tool_selection_experiment(ai_component_id, *, tools, test_cases, target_model=None, tool_source="manual", system_prompt=None, optimize_system_prompt=False, optimization_guidance=None, epochs=None, train_split_ratio=None, name=None, description=None)`. It atomically creates the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment — call `start_experiment(...)` to run it. `tools` is a list of `{"name", "description", "input_schema"?}` and `test_cases` a list of `{"query", "expected_tool"}` (use `""`, or a supported no-tool alias, as `expected_tool` for queries that should call no tool). `tool_source` is `"manual"` (definitions supplied directly) or `"mcp"`. This is a dedicated method, so `toolSelection` is not a `task_type` you pass to `create_experiment(...)` and its evaluator is not created via `create_evaluators(...)`. Auto-discovering tools from an MCP server URL is a dashboard flow; the SDK takes the tool definitions directly.
 
 Existing tool-optimization experiments, canonical dataset cases, evaluators,
 and iterations come back through the normal SDK methods. Use
