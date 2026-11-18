@@ -423,13 +423,37 @@ send `promptFormat: "multi_message"`, `initialPromptMessages`, and `inputVariabl
 in the experiment creation body. Check the installed SDK signature before using
 new creation arguments; do not assume every API field has a snake_case SDK parameter.
 
+### Guide an experiment
+
+When the user wants to focus optimization or supply context, use `optimization_guidance` on experiment create/update. Default to experiment scope; use `update_component_rules` only when the user wants rules across experiments. Keep existing local rules when replacing only part of a brief. Rules guide critiques and prompt edits. Do not claim that a focus rule changes scoring weights or selects targeted cases.
+
+Read [references/optimization-guidance.md](references/optimization-guidance.md) for the SDK types, JSON shape, CLI flags, rule limits and component version-conflict handling. These methods require an SDK/server release with guidance support; if the installed SDK lacks the parameter or method, use a compatible release rather than inventing a signature.
+
+### Cancel an experiment
+
+When the user asks to stop a prompt/tool optimization run, call
+`client.cancel_experiment(experiment_id)` (or await the async equivalent), or use
+`promptic experiments cancel <id> --yes --json` after user authorization.
+This requires the SDK/CLI and server release that includes experiment cancellation;
+older SDKs do not expose the method or command.
+
+`{"status": "canceling"}` acknowledges the request, not a stopped worker. Read
+`get_experiment(id)["experimentStatus"]` until terminal, using bounded polling if
+waiting was requested. Only `canceled` confirms cancellation; `completed` or
+`failed` must be reported as their actual outcome. Ownerless pending/scheduled
+runs can return `canceled` immediately. In-flight work may finish and incur usage
+charges; saved results remain. Repeated cancellation requests are idempotent.
+Do not use deletion, Ctrl-C, or a client timeout as a substitute for remote
+cancellation. Active runs must stop before deletion. See
+[the API cancellation contract](references/api.md#cancel-an-experiment) for errors.
+
 ## Tool Optimization
 
 Distinct from prompt optimization, Promptic also optimizes the **tool descriptions** an LLM chooses between so the model picks the right tool for a query (task type `toolSelection`). It's a separate optimizer: the input is a set of tool definitions and representative queries, and each iteration returns optimized descriptions in `toolDescriptions` plus `selectionSystemPrompt` when system-prompt optimization is enabled.
 
 Tool definitions come either from an MCP server URL (with Bearer-token or OAuth 2.0 auth) that Promptic auto-discovers, or from a JSON array pasted directly into the wizard (Anthropic `input_schema`, OpenAI `{type, function}`, or plain `{name, description}` shapes are all normalized). A tool-optimization experiment can also attach an optional `systemPrompt` (used as fixed context during evaluation); when the **"Also optimize the system prompt"** toggle is on, the optimizer rewrites that system prompt alongside the tool descriptions. Read both results from the best iteration as `selectionSystemPrompt` and `toolDescriptions`.
 
-Create one programmatically with `create_tool_selection_experiment(ai_component_id, *, tools, test_cases, target_model=None, tool_source="manual", system_prompt=None, optimize_system_prompt=False, epochs=None, train_split_ratio=None, name=None, description=None)`. It atomically creates the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment — call `start_experiment(...)` to run it. `tools` is a list of `{"name", "description", "input_schema"?}` and `test_cases` a list of `{"query", "expected_tool"}` (use `""`, or a supported no-tool alias, as `expected_tool` for queries that should call no tool). `tool_source` is `"manual"` (definitions supplied directly) or `"mcp"`. This is a dedicated method, so `toolSelection` is not a `task_type` you pass to `create_experiment(...)` and its evaluator is not created via `create_evaluators(...)`. Auto-discovering tools from an MCP server URL is a dashboard flow; the SDK takes the tool definitions directly.
+Create one programmatically with `create_tool_selection_experiment(ai_component_id, *, tools, test_cases, target_model=None, tool_source="manual", system_prompt=None, optimize_system_prompt=False, optimization_guidance=None, epochs=None, train_split_ratio=None, name=None, description=None)`. It atomically creates the experiment, its managed dataset, the tool definitions and canonical cases, the system-prompt settings, and the required `toolSelection` evaluator as one pending experiment — call `start_experiment(...)` to run it. `tools` is a list of `{"name", "description", "input_schema"?}` and `test_cases` a list of `{"query", "expected_tool"}` (use `""`, or a supported no-tool alias, as `expected_tool` for queries that should call no tool). `tool_source` is `"manual"` (definitions supplied directly) or `"mcp"`. This is a dedicated method, so `toolSelection` is not a `task_type` you pass to `create_experiment(...)` and its evaluator is not created via `create_evaluators(...)`. Auto-discovering tools from an MCP server URL is a dashboard flow; the SDK takes the tool definitions directly.
 
 Existing tool-optimization experiments, canonical dataset cases, evaluators,
 and iterations come back through the normal SDK methods. Use
@@ -484,6 +508,7 @@ promptic experiments delete <id>    # Delete an experiment
 promptic experiments start <id>     # Start the configured evaluation or optimization
 promptic experiments duplicate <id> [--evaluate-only] [--start] [-p PROMPT] # Clone cases + evaluators
 promptic experiments cases <id> --iteration-id <iteration-id> [--sort score] [--cursor CURSOR] --json
+promptic experiments cancel <id> [--yes] [--json] # Request cancellation; does not wait
 promptic experiments continue <id> [--start]                 # Clone, seed initial prompt from source's best iteration
 
 # Evaluators
@@ -516,7 +541,7 @@ promptic datasets delete <ds-id> --component <id>  # Delete dataset
 ## Key Types
 
 Enums (Literal types):
-- `ExperimentStatus`: `"pending" | "scheduled" | "running" | "completed" | "failed"`
+- `ExperimentStatus`: `"pending" | "scheduled" | "running" | "canceling" | "canceled" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` experiments are created with the dedicated `create_tool_selection_experiment(...)` method, **not** by passing a `task_type` to `create_experiment(...)`; the value is also surfaced by `get_experiment(...)` / `list_experiments(...)` for existing tool-selection / MCP-optimization experiments.
 - `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.

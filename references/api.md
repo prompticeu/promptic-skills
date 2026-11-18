@@ -226,6 +226,7 @@ responses expose the scope as `aiApplicationId`.
 client.list_components() -> ComponentList
 client.create_component(name: str, *, description=None) -> ComponentCreated
 client.get_component(component_id: str) -> Component
+client.update_component_rules(component_id: str, brief: OptimizationBrief, *, expected_version: int) -> Component
 client.delete_component(component_id: str) -> None
 ```
 
@@ -248,6 +249,7 @@ client.create_experiment(
     prompt_format=None,              # "single" | "multi_message"
     initial_prompt_messages=None,    # ordered role/content dictionaries
     initial_prediction_model_schema=None,
+    optimization_guidance=None,
     input_variables=None,              # [{"name": "message", "column": "message"}]
 ) -> Experiment
 client.create_tool_selection_experiment(
@@ -260,15 +262,17 @@ client.create_tool_selection_experiment(
     system_prompt=None,
     optimize_system_prompt=False,
     evaluation_only=False,           # evaluate supplied tools without rewriting
+    optimization_guidance=None,
     epochs=None,
     train_split_ratio=None,          # training fraction in [0.3, 0.9]
     name=None,
     description=None,
 ) -> Experiment
 client.get_experiment(experiment_id: str) -> Experiment
-client.update_experiment(experiment_id: str, **updates) -> Experiment
+client.update_experiment(experiment_id: str, *, optimization_guidance=None, **updates) -> Experiment
 client.delete_experiment(experiment_id: str) -> None
 client.start_experiment(experiment_id: str) -> ExperimentStarted
+client.cancel_experiment(experiment_id: str) -> ExperimentCancellation
 client.duplicate_experiment(
     experiment_id: str,
     *,
@@ -316,6 +320,34 @@ The platform also supports `toolSelection` for optimizing tool descriptions
 from MCP or manually supplied definitions. Do not pass it as `task_type` to
 `create_experiment(...)`; use `create_tool_selection_experiment(...)` instead.
 Returned experiments may include `systemPrompt` and `optimizeSystemPrompt`.
+
+### Cancel an experiment
+
+Requires an SDK and server release with experiment-cancellation support. Both
+sync and async clients expose `cancel_experiment(experiment_id)`, which sends
+`POST /api/v1/experiments/{experimentId}/cancel` without a request body.
+
+- `{"status": "canceled"}`: cancellation is complete, including an ownerless
+  pending/scheduled run canceled before work starts.
+- `{"status": "canceling"}`: the request was accepted; the worker still needs to
+  stop at a safe boundary. In-flight work may finish and incur usage charges.
+
+The method does not wait. If the user needs confirmation that work has stopped,
+poll `get_experiment` with a bounded timeout and reasonable interval until
+`experimentStatus` is `canceled`, `completed`, or `failed`. Report the actual
+outcome; a polling timeout is not proof of cancellation. Saved results remain.
+Repeated requests for canceling/canceled experiments are idempotent.
+
+Errors preserve `PrompticAPIError.status_code`: `401` for authentication, `404`
+for an unknown experiment or one outside the selected AI Application, and `409`
+for an experiment that cannot be canceled (such as completed/failed).
+
+CLI: `promptic experiments cancel <id>` asks for confirmation; use `--yes --json`
+for an already-authorized scripted request. Exit code zero means the request
+succeeded, not necessarily that the worker has stopped. Check
+`promptic experiments get <id> --json` for the current status. Stopping the local
+client or pressing Ctrl-C does not cancel remote work. Do not use deletion as a
+substitute: cancel and confirm a terminal status before deleting an active run.
 
 ## Evaluators
 
@@ -462,3 +494,5 @@ client.delete_dataset_case(component_id: str, dataset_id: str, case_id: int) -> 
 ```
 
 `Dataset` reports a `caseCount`; `DatasetWithCases` includes the full `cases` list.
+
+For guidance shapes, limits, exact locks, shared rules and version conflicts, see [optimization-guidance.md](optimization-guidance.md).
