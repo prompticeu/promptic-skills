@@ -1,12 +1,12 @@
 ---
 name: promptic
-description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt optimization, datasets, and Agent Optimization. Use when code imports `promptic_sdk`; when the user asks to trace, optimize, benchmark, or deploy an agent or prompt; or when running an agent externally and submitting predictions, files, or traces for scoring. Also use for OpenTelemetry-based LLM, architecture, workflow, and semantic parent/child tracing, canonical datasets, or programmatic AI Component management.
+description: Integrate the Promptic Python SDK for LLM observability, tracing, prompt evaluation and optimization, datasets, and Agent Optimization. Use when code imports `promptic_sdk`; when the user asks to trace, evaluate, optimize, benchmark, or deploy an agent or prompt; or when running an agent externally and submitting predictions, files, or traces for scoring. Also use for OpenTelemetry-based LLM, architecture, workflow, and semantic parent/child tracing, canonical datasets, or programmatic AI Component management.
 ---
 
 # Promptic Python SDK
 
 SDK and CLI for the [Promptic](https://promptic.eu) platform — LLM tracing,
-prompt optimization, and Agent Optimization.
+prompt evaluation and optimization, and Agent Optimization.
 
 ## Installation
 
@@ -321,6 +321,15 @@ argument. Do not use the retired `strategy` or `array_strategy` keywords.
 Do not add or describe Auto Engineer or autonomous optimization loops; they are
 not part of this workflow.
 
+## Prompt evaluation without optimization
+
+When a local coding agent authors prompt candidates and Promptic should only run
+and score them, use evaluation-only experiments (`epochs=0`). Follow
+[references/prompt-evaluation.md](references/prompt-evaluation.md) for candidate
+duplication, sync/async SDK and CLI support, bounded status polling, per-case
+failure inspection, comparison and compatibility notes. Use Agent Optimization
+when the full Agent executes externally and submits its outputs instead.
+
 ## Prompt Optimization Workflow
 
 Optimize prompts via experiments:
@@ -384,11 +393,11 @@ flatten a chat prompt into one string. `{var}` placeholders work inside message
 content and must match the case's `inputPayload` keys. Put expected answers in
 `expectedPayload`, not in a user or assistant message used as an input.
 
-The SDK's `create_experiment` accepts `input_variables`, but **does not accept**
-`prompt_format` or `initial_prompt_messages`. Create the pending experiment,
+SDK releases with chat-template creation support accept `prompt_format` and
+`initial_prompt_messages`. For older clients, create the pending experiment,
 then set the message contract with `update_experiment` using the API's camelCase
-field names. Do this before starting the experiment; updates after it starts
-are rejected.
+field names, as shown below. Do this before starting the experiment; updates
+after it starts are rejected.
 
 ```python
 with PrompticClient() as client:
@@ -472,8 +481,9 @@ promptic experiments create-tool-selection --component-id <id> --tools tools.jso
 promptic experiments get <id>       # Get experiment details
 promptic experiments update <id>    # Update a pending experiment
 promptic experiments delete <id>    # Delete an experiment
-promptic experiments start <id>     # Start optimization
-promptic experiments duplicate <id> [--start] [-p PROMPT]    # Clone experiment (dataset cases + evaluators)
+promptic experiments start <id>     # Start the configured evaluation or optimization
+promptic experiments duplicate <id> [--evaluate-only] [--start] [-p PROMPT] # Clone cases + evaluators
+promptic experiments cases <id> --iteration-id <iteration-id> [--sort score] [--cursor CURSOR] --json
 promptic experiments continue <id> [--start]                 # Clone, seed initial prompt from source's best iteration
 
 # Evaluators
