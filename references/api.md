@@ -454,9 +454,11 @@ of a single `structuredOutput` evaluator; reusing an explicit `id` across evalua
 
 ### `structuredOutput` evaluator config
 
-The `structuredOutput` type is shown as **Schema match (all fields)** in the dashboard and is no
-longer offered for new evaluators; existing ones keep running. New structured-output setups use the
-targeted checks above. Supported `config` keys for the `structuredOutput` type:
+The `structuredOutput` type is shown as **Schema match (all fields)** in the dashboard, which no
+longer offers it for new setups and steers to the targeted checks above. The API and SDK still
+create `structuredOutput` evaluators, and it remains the only evaluator that scores fields inside
+list items (targeted checks reject paths into list items). Supported `config` keys for the
+`structuredOutput` type:
 
 - `schema_definition` (dict): JSON schema describing the prediction shape. Drives default per-field scoring — strings → embedding similarity, enums/booleans/integers → exact, numbers → tolerance, nested objects → recursive, arrays → content-aligned soft F1 (not positional).
 - `fields` (dict, optional): per-field overrides keyed by dotted JSON path. Each entry accepts:
