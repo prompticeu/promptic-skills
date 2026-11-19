@@ -244,7 +244,10 @@ client.create_experiment(
     description=None,
     provider="openai",               # "openai" | "openrouter" | "custom" | "google"
     optimizer="prompticV2",          # "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"
-    hyperparameters=None,            # {"epochs": int, "trainSplitRatio": float, "numFewShots": int, "enableCot": bool}
+    hyperparameters=None,            # epochs=0 evaluates only
+    evaluation_only=False,           # explicit convenience for epochs=0
+    prompt_format=None,              # "single" | "multi_message"
+    initial_prompt_messages=None,    # ordered role/content dictionaries
     initial_prediction_model_schema=None,
     optimization_guidance=None,
     input_variables=None,              # [{"name": "message", "column": "message"}]
@@ -258,6 +261,7 @@ client.create_tool_selection_experiment(
     tool_source="manual",            # "manual" | "mcp"
     system_prompt=None,
     optimize_system_prompt=False,
+    evaluation_only=False,           # evaluate supplied tools without rewriting
     optimization_guidance=None,
     epochs=None,
     train_split_ratio=None,          # training fraction in [0.3, 0.9]
@@ -276,6 +280,34 @@ client.duplicate_experiment(
     initial_prompt_override=None,    # Or override the initial prompt with custom text
 ) -> Experiment                       # Includes ``modelUnavailable`` flag when source's model is gone
 ```
+
+**Evaluation-only prompts:** use `evaluation_only=True` on creation, or preserve
+an existing candidate's hyperparameters and set `epochs` to `0` before starting.
+See [prompt-evaluation.md](prompt-evaluation.md) for the local coding-agent loop,
+status polling and case-result pagination. Model/evaluator and platform usage
+charges still apply; the successful optimization fee does not. The convenience
+argument and case-result API require the matching SDK/server release.
+
+**Multi-message prompts:** current SDK creation supports `prompt_format` and
+`initial_prompt_messages` on both clients. Older SDKs can create a pending
+experiment and call `update_experiment(id, promptFormat="multi_message",
+initialPromptMessages=[...])` before starting. Preserve message roles and order.
+
+```python
+client.list_experiment_cases(
+    experiment_id: str, *, iteration_id: int,
+    split="all", limit=25, cursor=None, sort=None, descending=False,
+) -> ExperimentCasePage
+```
+
+The case-results method returns `data`, `iterationScores`, `nextCursor`, `total`,
+`totalDatasetCaseCount` and `trainDatasetCaseCount`. Rows include `variables`,
+`expected`, optional `prediction`, `predictionAdditional`, `latencyMs`, `score`,
+`evaluatorScores` and `split`. `iteration_id` is the persisted positive ID, not
+iteration number 0. Sorting applies before pagination; follow `nextCursor` with
+the same filters and sort. Limits are 1–100. Use `sort="score"` to inspect low
+scores first. This reads saved results and does not trigger inference.
+
 
 Each `Experiment` exposes its `aiComponentId` and a dedicated `datasetId`.
 Training and eval data are supplied as dataset cases on that dataset (see
@@ -413,7 +445,7 @@ In addition to prompt optimization, Promptic can optimize the **tool description
 - **Tools** (`tools`): a list of tool definitions, each `{"name", "description"}` with an optional `input_schema` (also accepted as `inputSchema`); at least one, tool names must be unique and cannot use a reserved no-tool alias. In the dashboard, definitions can also be imported from an MCP server URL (Bearer-token or OAuth 2.0 auth) or pasted as a JSON array; Anthropic-style (`{name, description, input_schema}`), OpenAI-function-calling-style (`{type, function: {name, description, parameters}}`), and plain (`{name, description}`) shapes are all normalized. `tool_source` records the provenance as `"manual"` (default) or `"mcp"`.
 - **Test cases** (`test_cases`): each is `{"query", "expected_tool"}` — the user query plus the supplied tool name that should fire. Use `""` as the canonical value for "no tool should be called". The API also accepts `"none"`, `"no tool"`, `"no-tool"`, `"no_tool"`, `"no tool call"`, `"no-tool-call"`, `"no_tool_call"`, `"no tools"`, `"no_tools"`, `"n/a"`, `"na"`, `"-"`, and `"__NO_TOOL__"`; all normalize to the same no-tool expectation. At least one case is required.
 - **Optional system prompt**: pass `system_prompt` to use as fixed context during evaluation. When `optimize_system_prompt=True`, the optimizer rewrites it alongside the tool descriptions. Read the best variant from `get_best_iteration(...)['selectionSystemPrompt']`; optimized descriptions are returned by the same iteration under `toolDescriptions`.
-- **Other options**: `target_model` (omit for the platform default), `epochs` (1–5), `train_split_ratio` (fraction assigned to training in `[0.3, 0.9]`; the remaining cases form the held-out evaluation split; omit to train and score on all cases), `name`, and `description`.
+- **Other options**: `target_model` (omit for the platform default), `epochs` (0–5; 0 evaluates only), `train_split_ratio` (fraction assigned to training in `[0.3, 0.9]`; the remaining cases form the held-out evaluation split; omit to train and score on all cases), `name`, and `description`.
 
 Existing tool-selection experiments, dataset cases, iterations, and evaluators
 come back through the normal SDK methods with `taskType: "toolSelection"`.
@@ -426,7 +458,7 @@ client.get_iteration(experiment_id: str, iteration_id: int) -> IterationWithScor
 client.get_best_iteration(experiment_id: str) -> IterationWithScores
 ```
 
-Iterations report two scores: `overallNormalizedScore` (train split, used to guide the search) and `evalNormalizedScore` (held-out eval split, `None` when `trainSplitRatio` is not configured on the experiment). `get_best_iteration` ranks by `evalNormalizedScore` when available, otherwise by `overallNormalizedScore`.
+Iterations report two scores: `overallNormalizedScore` (train split, used to guide the search) and `evalNormalizedScore` (held-out eval split, equal to the overall score for new runs without a split; older runs may return `None`). `get_best_iteration` ranks by `evalNormalizedScore` when available, otherwise by `overallNormalizedScore`.
 
 Iterations also expose `avgPredictionLatencyMs` — the mean wall-clock duration (milliseconds) of the target-model prediction calls in that iteration, averaged across train + eval predictions. It excludes retries, rate-limit backoff, and failed attempts, so it reflects real per-call response time. The key is **absent (or `None`)** on iterations completed before per-prediction latency tracking shipped, so use `.get("avgPredictionLatencyMs")` rather than direct subscript when handling legacy iterations. Useful for comparing two equally-scoring iterations on speed.
 
