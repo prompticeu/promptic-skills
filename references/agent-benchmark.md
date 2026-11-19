@@ -65,7 +65,8 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | Evaluator | Use it when | Required setup |
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
-| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with scalar method `exact`, `contains`, `embedding`, or `judge`, or array method `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for `judge` and `array_judge`. |
+| `ExactMatch` / `ContainsText` / `SemanticSimilarity` / `AIJudge` (targeted checks) | A single Output field, or the whole response, should be scored by one method, and each requirement deserves its own name, weight, and score. | Name the field (omit for the whole response) and pick the method. Only `AIJudge` takes `instructions` and a judge `model`. |
+| `FieldLevelJudge` (Schema match) | Several Output fields should be scored in one evaluator with a method per field, or a field lives inside a list item. | Configure each included field with scalar method `exact`, `contains`, `embedding`, or `judge`, or array method `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for `judge` and `array_judge`. |
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
@@ -73,11 +74,14 @@ Choose the least complex evaluator that can measure the requirement:
 
 1. Choose `ClassificationF1` for categorical enum fields measured across a
    representative case set.
-2. Choose `FieldLevelJudge` when the Output contract identifies the values to
-   check and each field can have an explicit comparison rule.
-3. Add `ExpectedBehaviorJudge` when a case has a narrow execution requirement
+2. Choose a targeted check (`ExactMatch`, `ContainsText`, `SemanticSimilarity`,
+   or `AIJudge`) when a single field or the whole response is scored by one
+   method and the requirement deserves its own weight and score.
+3. Choose `FieldLevelJudge` (Schema match) to score several fields in one
+   evaluator with a method per field, or to score a field inside a list item.
+4. Add `ExpectedBehaviorJudge` when a case has a narrow execution requirement
    that must be verified from its trace.
-4. Choose `VerifierAgent` when evaluation requires a multi-step investigation
+5. Choose `VerifierAgent` when evaluation requires a multi-step investigation
    across files, outputs, expected evidence, or traces.
 
 ### Classification F1
@@ -91,9 +95,35 @@ Do not use F1 for generated text, arbitrary extracted strings, continuous
 values, or explanations. It measures whether the category is correct, not why
 the Agent chose it or whether its execution was appropriate.
 
+### Targeted checks
+
+A targeted check scores one output field, or the whole response when the field is omitted, with a
+single method, and carries its own name, weight, and score. Construct them with the typed models
+`ExactMatch`, `ContainsText`, `SemanticSimilarity`, and `AIJudge` (kinds `exact_match`,
+`contains_text`, `semantic_similarity`, `ai_judge`):
+
+- `ExactMatch` — `1.0` when the value equals the expected value; lists score equal items in any
+  order.
+- `ContainsText` — `1.0` when the expected text appears in a text field.
+- `SemanticSimilarity` — embedding similarity (shown as **Embedding Similarity**); fast and cheap
+  but approximate.
+- `AIJudge` — a model judges whether the value says the same as the expected value. Only `AIJudge`
+  accepts `instructions` (added on top of the built-in equivalence rubric) and `model` (a
+  judge-eligible model).
+
+The field is a dotted path such as `answer` or `user.name`. Paths into list items such as
+`people[].name` are rejected; target the list (`people`) instead and its items are matched by
+content. The server checks that the field exists in the Output schema and suits the method. A plan
+can hold up to 64 targeted checks, including several of the same kind; their names must be unique
+among the targeted checks, and reused IDs or names raise `duplicate_evaluator_id` /
+`duplicate_evaluator_name`. Every typed evaluator accepts `enabled=False` to keep its configuration
+without running it. Targeted checks require a platform deployment that supports them.
+
 ### Field-level judge
 
-Use field-level evaluation when the structured Output contract makes failures
+`FieldLevelJudge` is shown as **Schema match** in the dashboard, which no longer offers it for new
+setups; the API and SDK keep supporting it, and it is the only evaluator that scores fields inside
+list items. Use field-level evaluation when the structured Output contract makes failures
 decomposable. Select exact comparison for identifiers and other canonical
 values, containment for required content, semantic comparison for equivalent
 language, and the corresponding array methods for lists. Reserve a per-field
@@ -179,14 +209,31 @@ Common typed configurations look like this:
 
 ```python
 from promptic_sdk import (
+    AIJudge,
     ClassificationF1,
+    ContainsText,
+    ExactMatch,
+    ExpectedBehaviorJudge,
     FieldLevelJudge,
     FieldScoring,
-    ExpectedBehaviorJudge,
+    SemanticSimilarity,
 )
 
 classification = ClassificationF1(field_paths=("currency",))
 
+# Targeted checks: one field (or the whole response) scored by one method.
+targeted = [
+    ExactMatch("invoice_number", "Invoice number", weight=2, required=True),
+    ContainsText("supplier.website", "Supplier website"),
+    AIJudge(
+        "summary",
+        "Summary",
+        instructions="Check factual equivalence, not writing style.",
+    ),
+    SemanticSimilarity("summary", "Summary wording", weight=0.5, enabled=False),
+]
+
+# Schema match: several fields in one evaluator, or fields inside list items.
 structured = FieldLevelJudge(
     fields={
         "invoice_number": FieldScoring(method="exact", weight=2),
