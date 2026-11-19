@@ -373,6 +373,20 @@ SDK/CLI workflow, contract, sandbox restrictions, failure handling, and result
 inspection. Requires the platform code-evaluator deployment; CLI source-file
 flags also require the matching SDK/CLI release.
 
+```python
+client.test_code_evaluator(config: CodeFunctionConfig, row: CodeFunctionTestRow) -> dict
+client.get_code_evaluator_test(test_id: str) -> dict
+```
+
+Both also exist on the async client. Probes execute one explicit sample in the
+configured sandbox and may consume credits; they make no model call and save
+no evaluator. Poll the returned `id` until `completed` or `failed`. Row fields
+are `input_variables`, `expected`, `predicted`, with optional `id` and
+`prediction_additional`; `input_text` is derived. This replaces the ambiguous
+`input`/`variables` keys. Runtime and syntax errors fail evaluations rather than
+becoming minimum quality scores. See the code evaluator reference for safe
+diagnostic fields and CLI test commands.
+
 ### Judge evaluator configs
 
 Promptic supports three judge evaluator types. Choose the variant that matches

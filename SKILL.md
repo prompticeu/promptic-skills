@@ -392,7 +392,12 @@ For custom deterministic scoring of a prompt experiment, use evaluator type
 `codeFunction` with Python or JavaScript source defining `score(row)`. Coding
 agents can create these through the SDK or the CLI; code executes in the
 platform's isolated sandbox, not in the client process. This is not an Agent
-Gym evaluator kind. Read [references/code-evaluators.md](references/code-evaluators.md)
+Gym evaluator kind. With the matching SDK/CLI and server release, use
+`test_code_evaluator()` / `get_code_evaluator_test()` or `promptic evaluators test`
+/ `test-result` to probe explicit sample outputs before starting a model run.
+Rows use `input_variables` and `input_text`; Python uses dictionary keys such as
+`row["input_variables"]`. Function errors fail evaluation, not quality scores.
+Read [references/code-evaluators.md](references/code-evaluators.md)
 for creation examples, row fields, return values, sandbox restrictions, version
 requirements, and the evaluation-only candidate workflow. Do not run uploaded
 evaluator source locally or assume saving it proves it works.

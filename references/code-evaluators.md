@@ -82,8 +82,8 @@ weight controls the contribution to the combined score.
 | Row key | Meaning |
 | --- | --- |
 | `id` | Case identifier; UUIDs are strings |
-| `input` | Display input text |
-| `variables` | Original input object |
+| `input_variables` | Original named input object |
+| `input_text` | Flattened input variables, not the rendered model prompt |
 | `expected` | Reference output |
 | `predicted` | Model output |
 | `prediction_additional` | Prediction metadata or null |
@@ -98,10 +98,52 @@ assume a particular cloud provider from the client. Sandbox usage may consume
 credits even when the function fails after execution starts. Keep secrets and
 unnecessary personal data out of source and diagnostic strings.
 
-Invalid source or a missing `score` function stops the experiment. A runtime
-error, invalid return value, or timeout produces the minimum score and
-diagnostics for affected cases. Do not interpret minimum scores with errors
-as valid model-quality failures; inspect diagnostics first.
+In Python the row is a dictionary: use `row["id"]` and
+`row["input_variables"]["question"]`, not `row.id`. JavaScript uses `row.id` and
+`row.input_variables.question`. Row contract version 2 replaces `input` and
+`variables` with the names above; update existing source explicitly. Do not
+silently rewrite historical results or promise backwards-compatible aliases.
+
+Invalid source, a missing `score`, runtime errors, invalid return values, and
+timeouts fail the evaluation rather than producing minimum quality scores.
+Diagnostics expose safe error codes, exception types and source positions when
+available, not arbitrary exception messages or full stacks. Stop and fix the
+evaluator; do not optimize prompts in response to an evaluator execution error.
+
+## Test the function first
+
+The matching SDK/CLI and server release adds a sandbox probe accepting one
+explicit sample prediction. This is the supported way to calibrate a function
+without running a model, saving an evaluator, or creating quality scores.
+
+```python
+probe = client.test_code_evaluator(
+    {"language": "python", "source": Path("score.py").read_text(encoding="utf-8")},
+    {"input_variables": {"question": "Say hello"}, "expected": "Hello", "predicted": "Hello"},
+)
+state = client.get_code_evaluator_test(probe["id"])
+```
+
+Poll `get_code_evaluator_test()` until `completed` or `failed`; do not repeatedly
+submit new probes while polling. `result` contains `score`/`reason` or safe
+`error`, `error_type`, `line`, `column`; `errorMessage` is the readable failure.
+Repeat with a deliberately incorrect `predicted` value to check the low-score
+path. Keep distinct predictions in distinct probe jobs. `CodeFunctionTestRow`
+is exported for typed samples. Async clients use the same methods with `await`.
+
+```bash
+promptic evaluators test --language python --source-file score.py --row-file row.json --json
+promptic evaluators test-result TEST_ID --json
+```
+
+`row.json` has `input_variables`, `expected`, and `predicted`; `id` and
+`prediction_additional` are optional. `input_text` is derived by the worker.
+JavaScript uses `--language javascript`. Files must be UTF-8 and each at most
+64 KiB in the CLI; the API request limit is 128 KiB. Tests use sandbox compute
+and may consume credits. A client timeout or Ctrl-C does not cancel remote
+execution. No secrets belong in samples or source. The dashboard offers the
+same **Test function** action with language-specific row help and source-line
+error markers. Editing the source clears its displayed result, not the remote job.
 
 ## Run and inspect
 
@@ -124,7 +166,8 @@ as valid model-quality failures; inspect diagnostics first.
    Follow `nextCursor` with identical sort/filters to inspect further pages.
    Evaluation-only iteration number is zero; its database ID is not zero.
 5. Check each case's `evaluatorScores`, not only the aggregate. Entries include
-   `rawScore`, normalized `score`, and `additional.reason` or `additional.error`.
+   `rawScore`, normalized `score`, and `additional.reason` on success. Function
+   execution errors fail the run and must not be treated as low quality scores.
    The dashboard Data tab and case details show scores and diagnostic reasons.
    Do not claim live managed sandbox execution or billing was verified from a
    local Docker run or mocked SDK transport tests.
