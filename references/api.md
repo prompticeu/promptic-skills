@@ -358,7 +358,7 @@ client.update_evaluator(experiment_id: str, evaluator_id: str, **data) -> Evalua
 client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
-Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput"|"codeFunction", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
 
 Reading evaluators back via `list_evaluators(...)` for a tool-selection experiment also surfaces the `"toolSelection"` evaluator type, but it is not a value to pass into `create_evaluators(...)` — see `toolSelection` evaluator below.
 
