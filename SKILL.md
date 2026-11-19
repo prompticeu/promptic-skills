@@ -316,8 +316,10 @@ existing-benchmark discovery, callback contract, resumable sessions, durable
 uploads, scoring submission, result inspection, comparison, and recovery. For
 exact public signatures, also read the Agent Optimization section of
 [references/api.md](references/api.md).
-For `FieldScoring`, select scalar or array behavior with the single `method=`
-argument. Do not use the retired `strategy` or `array_strategy` keywords.
+Score output fields with targeted checks (`ExactMatch`, `ContainsText`,
+`SemanticSimilarity`, `AIJudge`), one per field. `FieldLevelJudge` with
+`FieldScoring` is deprecated for Agent Gym: do not add or change one; benchmark
+versions that already use it keep running.
 Do not add or describe Auto Engineer or autonomous optimization loops; they are
 not part of this workflow.
 
@@ -544,5 +546,5 @@ Enums (Literal types):
 - `ExperimentStatus`: `"pending" | "scheduled" | "running" | "canceling" | "canceled" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` experiments are created with the dedicated `create_tool_selection_experiment(...)` method, **not** by passing a `task_type` to `create_experiment(...)`; the value is also surfaced by `get_experiment(...)` / `list_experiments(...)` for existing tool-selection / MCP-optimization experiments.
-- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.
+- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection" | "exactMatch" | "containsText" | "semanticSimilarity" | "aiJudge"` — `exactMatch`, `containsText`, `semanticSimilarity`, and `aiJudge` are the targeted checks that score one output field or the whole response (see `references/api.md`). `referenceJudge` is shown as **Deviation Judge**. `similarity` and `structuredOutput` (Schema match) are legacy — the dashboard no longer offers them for new setups and steers to `aiJudge` and targeted checks — but the API and SDK still accept them for `create_evaluators(...)`, and `structuredOutput` remains the only evaluator that scores fields inside list items. The `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment. Every evaluator also accepts an optional `enabled` bool (default `true`).
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"` — `"promptic"` is the legacy v1 value retained for historical experiments; use `"prompticV2"` for new ones.

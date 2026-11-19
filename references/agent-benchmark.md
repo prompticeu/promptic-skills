@@ -65,16 +65,21 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | Evaluator | Use it when | Required setup |
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
-| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with scalar method `exact`, `contains`, `embedding`, or `judge`, or array method `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for `judge` and `array_judge`. |
+| `ExactMatch` / `ContainsText` / `SemanticSimilarity` / `AIJudge` (targeted checks) | A single Output field, or the whole response, should be scored by one method, and each requirement deserves its own name, weight, and score. | Name the field (omit for the whole response) and pick the method. Only `AIJudge` takes `instructions` and a judge `model`. |
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
+
+`FieldLevelJudge` (Schema match) is deprecated and is not a choice for new or
+changed evaluators; see [Field-level judge (deprecated)](#field-level-judge-deprecated).
 
 Choose the least complex evaluator that can measure the requirement:
 
 1. Choose `ClassificationF1` for categorical enum fields measured across a
    representative case set.
-2. Choose `FieldLevelJudge` when the Output contract identifies the values to
-   check and each field can have an explicit comparison rule.
+2. Choose targeted checks (`ExactMatch`, `ContainsText`, `SemanticSimilarity`,
+   or `AIJudge`) when the Output contract identifies the values to check. Add
+   one check per field, each with its own method, weight, and score; omit the
+   field to score the whole response.
 3. Add `ExpectedBehaviorJudge` when a case has a narrow execution requirement
    that must be verified from its trace.
 4. Choose `VerifierAgent` when evaluation requires a multi-step investigation
@@ -91,17 +96,60 @@ Do not use F1 for generated text, arbitrary extracted strings, continuous
 values, or explanations. It measures whether the category is correct, not why
 the Agent chose it or whether its execution was appropriate.
 
-### Field-level judge
+### Targeted checks
 
-Use field-level evaluation when the structured Output contract makes failures
+A targeted check scores one output field, or the whole response when the field is omitted, with a
+single method, and carries its own name, weight, and score. Construct them with the typed models
+`ExactMatch`, `ContainsText`, `SemanticSimilarity`, and `AIJudge` (kinds `exact_match`,
+`contains_text`, `semantic_similarity`, `ai_judge`):
+
+- `ExactMatch` — `1.0` when the value equals the expected value. A list at a named field scores
+  equal items in any order; without a field, the whole response is compared as one value, so a
+  reordered top-level list scores `0.0`.
+- `ContainsText` — `1.0` when the expected text appears in a text field.
+- `SemanticSimilarity` — embedding similarity (shown as **Embedding Similarity**); fast and cheap
+  but approximate.
+- `AIJudge` — a model judges whether the value says the same as the expected value. Only `AIJudge`
+  accepts `instructions` (added on top of the built-in equivalence rubric) and `model` (a
+  judge-eligible model).
+
+The field is a dotted path such as `answer` or `user.name`. Paths into list items such as
+`people[].name` are rejected; target the list (`people`) instead and its items are matched by
+content. To judge a list, target the list itself, for example `AIJudge("pages", ...)`, which
+judges the whole list in one call. The server checks that the field exists in the Output schema and suits the method. A plan
+can hold up to 64 targeted checks, including several of the same kind; their names must be unique
+among the targeted checks, and reused IDs or names raise `duplicate_evaluator_id` /
+`duplicate_evaluator_name`. Every typed evaluator accepts `enabled=False` to keep its configuration
+without running it. Targeted checks require `promptic-sdk` 1.6.0 or later and a platform
+deployment that supports them; on an older SDK the four imports fail.
+
+Use targeted checks when the structured Output contract makes failures
 decomposable. Select exact comparison for identifiers and other canonical
-values, containment for required content, semantic comparison for equivalent
-language, and the corresponding array methods for lists. Reserve a per-field
-LLM judge for a field whose correctness genuinely requires interpretation, and
-give that field specific instructions.
+values, containment for required content, and semantic comparison for
+equivalent language. Reserve `AIJudge` for a field whose correctness genuinely
+requires interpretation, and give that field specific instructions.
 
 This is preferable to holistic judging when it can express the contract: it is
 cheaper, easier to calibrate, and reveals exactly which output field regressed.
+
+### Field-level judge (deprecated)
+
+`FieldLevelJudge` (kind `field_level_judge`, shown as **Schema match** in the
+dashboard) is deprecated. Do not add it to a benchmark, and do not change one
+that is already stored: the platform rejects a new or changed `FieldLevelJudge`
+with `deprecated_evaluator_kind`. Benchmark versions that already use it keep
+running and scoring as configured, and it can still be removed.
+
+Replace it with one targeted check per field. A field that was listed with
+`include=False` simply gets no check. Its array methods have no per-item
+equivalent; target the list field with `ExactMatch`, `SemanticSimilarity`, or
+`AIJudge` instead. In particular, do not rely on `array_judge`: in Agent Gym it
+is scored as a structural list comparison and does not call the judge.
+
+Read an existing `FieldLevelJudge` only to understand how a stored benchmark is
+scored. Its `FieldScoring` entries use one selector, `method`, with scalar
+values `exact`, `embedding`, `contains`, and `judge` and array values
+`array_exact`, `array_similarity`, and `array_judge`.
 
 ### Expected Behavior Judge
 
@@ -178,38 +226,37 @@ execution trace with its fixed `behavior_compliance` metric.
 Common typed configurations look like this:
 
 ```python
-from promptic_sdk import (
-    ClassificationF1,
-    FieldLevelJudge,
-    FieldScoring,
-    ExpectedBehaviorJudge,
-)
+from promptic_sdk import ClassificationF1, ExpectedBehaviorJudge
 
 classification = ClassificationF1(field_paths=("currency",))
-
-structured = FieldLevelJudge(
-    fields={
-        "invoice_number": FieldScoring(method="exact", weight=2),
-        "summary": FieldScoring(
-            method="judge",
-            judge_instructions="Check factual equivalence, not writing style.",
-        ),
-        "line_items": FieldScoring(method="array_similarity"),
-    }
-)
 
 behavior = ExpectedBehaviorJudge()
 ```
 
-`FieldScoring` has one comparison selector, `method`. Its scalar values are
-`exact`, `embedding`, `contains`, and `judge`; its array values are
-`array_exact`, `array_similarity`, and `array_judge`. The former `strategy` and
-`array_strategy` keywords are not accepted by the current SDK.
+Targeted checks need `promptic-sdk` 1.6.0 or later, so they are imported
+separately:
 
-Pass one or more of these objects in `evaluators=[...]`. For
-`FieldLevelJudge`, omitted Output-schema fields do not receive an explicit
-override; use `include=False` when a listed field is intentionally excluded.
-Use dotted field paths for nested fields.
+```python
+from promptic_sdk import AIJudge, ContainsText, ExactMatch, SemanticSimilarity
+
+# Targeted checks: one field (or the whole response) scored by one method.
+targeted = [
+    ExactMatch("invoice_number", "Invoice number", weight=2, required=True),
+    ContainsText("supplier.website", "Supplier website"),
+    AIJudge(
+        "summary",
+        "Summary",
+        instructions="Check factual equivalence, not writing style.",
+    ),
+    SemanticSimilarity("summary", "Summary wording", weight=0.5, enabled=False),
+    # A list field is targeted as a whole; its items are matched by content.
+    AIJudge("line_items", "Line items"),
+]
+```
+
+Pass one or more of these objects in `evaluators=[...]`. An Output-schema field
+without a targeted check is not scored. Use dotted field paths for nested
+fields.
 
 ## Configure a benchmark with Python
 

@@ -56,6 +56,8 @@ AgentGymClient(
     ai_application_id: str | None = None,
 )
 
+# Deprecated with FieldLevelJudge: do not add or change one. Use the targeted
+# checks ExactMatch / ContainsText / SemanticSimilarity / AIJudge instead.
 FieldScoring(
     method: Literal[
         "exact",
@@ -358,7 +360,11 @@ client.update_evaluator(experiment_id: str, evaluator_id: str, **data) -> Evalua
 client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
-Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput"|"exactMatch"|"containsText"|"semanticSimilarity"|"aiJudge", "weight": float, "enabled": bool (optional, default true), "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+
+`exactMatch`, `containsText`, `semanticSimilarity`, and `aiJudge` are **targeted checks**: each scores one output field or the whole response with a single method (see [Targeted checks](#targeted-checks)). `similarity` (an LLM style comparison) and `structuredOutput` (Schema match across all fields) are legacy for Prompt Optimization: the dashboard no longer offers them for new setups, but `create_evaluators(...)` still creates them through the API and SDK. Prefer `aiJudge` and targeted checks, and use `structuredOutput` when a field inside a list item must be scored.
+
+Every evaluator carries an `enabled` flag (default `true`). A disabled evaluator keeps its configuration but is not run and does not count toward the score; pass `enabled` to `create_evaluators(...)` or `update_evaluator(...)` to switch it. Targeted checks and `enabled` require a platform deployment that supports them.
 
 Reading evaluators back via `list_evaluators(...)` for a tool-selection experiment also surfaces the `"toolSelection"` evaluator type, but it is not a value to pass into `create_evaluators(...)` — see `toolSelection` evaluator below.
 
@@ -369,10 +375,12 @@ how the judge should score the prediction against the expected output.
 
 All three judge types accept `scaleMin` / `scaleMax` and require a `config`:
 
-- `referenceJudge` — `config.instructions` (string): rubric text. The judge
-  scores predicted and expected outputs independently against the rubric
-  (caching the expected-side judgment) and rewards predictions that match or
-  exceed the expected score. Best for intrinsic quality rubrics.
+- `referenceJudge` — `config.instructions` (string): rubric text. Shown as
+  **Deviation Judge** in the dashboard. The judge scores predicted and expected
+  outputs independently against the rubric (caching the expected-side judgment)
+  and lowers the score for any difference in either direction — a prediction
+  rated lower *or* higher than the expected output loses points in proportion.
+  Best for intrinsic quality rubrics.
 - `comparisonJudge` — `config.instructions` (string): rubric text. The judge
   sees predicted and expected together in one prompt and scores how they
   compare. Best for rubrics that relate the two outputs (e.g. structural
@@ -402,9 +410,59 @@ client.create_evaluators(exp_id, [
 ])
 ```
 
+### Targeted checks
+
+`exactMatch`, `containsText`, `semanticSimilarity`, and `aiJudge` each score one output field, or
+the whole response, with a single method on a `0.0`–`1.0` scale. They share one `config` shape:
+
+- `field` (string, optional): a dotted output path such as `answer` or `user.name`. Omit it to
+  score the whole response. Paths into list items such as `people[].name` are rejected; target the
+  list (`people`) instead, and its items are matched by content.
+- `instructions` (string, optional): **`aiJudge` only.** Extra guidance on top of the built-in
+  equivalence rubric. Rejected for the other three types.
+- `schema_definition` (dict, optional): the output schema. When present, the server also checks
+  that `field` exists and suits the method before saving; without it only the path syntax is
+  checked.
+
+| Type                 | Scores                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `exactMatch`         | `1.0` when the value equals the expected value (numbers use a small tolerance). A list at a named `field` scores equal items as F1 in any order; without `field` the whole response is compared as one value, so a reordered top-level list scores `0.0` |
+| `containsText`       | `1.0` when the expected text appears in the field, ignoring case and surrounding whitespace |
+| `semanticSimilarity` | Embedding similarity (shown as **Embedding Similarity**); fast and cheap but approximate     |
+| `aiJudge`            | A model judges whether the output says the same as the expected value                       |
+
+`aiJudge` uses the experiment's judge model and `semanticSimilarity` uses embeddings, so both incur
+model usage; `exactMatch` and `containsText` do not.
+
+```python
+client.create_evaluators(exp_id, [
+    {"name": "Invoice ID", "type": "exactMatch", "config": {"field": "invoice_id"}},
+    {
+        "name": "Summary",
+        "type": "aiJudge",
+        "config": {
+            "field": "summary",
+            "instructions": "Amounts, currencies and dates must match.",
+        },
+    },
+    {"name": "Mentions refund", "type": "containsText", "enabled": False},
+])
+client.update_evaluator(exp_id, evaluator_id, enabled=True)
+```
+
+For structured output the create wizard now starts with one targeted check per output field instead
+of a single `structuredOutput` evaluator. Evaluator IDs are generated by the server; give each
+evaluator in an experiment a distinct name. The `duplicate_evaluator_id` and
+`duplicate_evaluator_name` error codes belong to Agent Gym evaluation plans
+(see `references/agent-benchmark.md`), not to this endpoint.
+
 ### `structuredOutput` evaluator config
 
-Supported `config` keys for the `structuredOutput` type:
+The `structuredOutput` type is shown as **Schema match (all fields)** in the dashboard, which no
+longer offers it for new setups and steers to the targeted checks above. The API and SDK still
+create `structuredOutput` evaluators, and it remains the only evaluator that scores fields inside
+list items (targeted checks reject paths into list items). Supported `config` keys for the
+`structuredOutput` type:
 
 - `schema_definition` (dict): JSON schema describing the prediction shape. Drives default per-field scoring — strings → embedding similarity, enums/booleans/integers → exact, numbers → tolerance, nested objects → recursive, arrays → content-aligned soft F1 (not positional).
 - `fields` (dict, optional): per-field overrides keyed by dotted JSON path. Each entry accepts:
