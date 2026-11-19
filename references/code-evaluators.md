@@ -1,0 +1,134 @@
+# Python and JavaScript code evaluators
+
+Use `codeFunction` for custom deterministic scoring in **prompt experiments**.
+Do not use it as an Agent Gym evaluator `kind`, as an agent implementation, or as
+a way to run arbitrary tools. Prefer built-in exact/contains checks when they
+already express the requirement.
+
+Requires a platform deployment containing code evaluator support (PRO-201).
+The SDK's existing sync/async `create_evaluators()` and `update_evaluator()`
+methods accept the configuration dictionary. The `CodeFunctionConfig` type and
+CLI source-file flags require the SDK/CLI release that adds code evaluators;
+check `promptic evaluators add --help` before assuming those flags are installed.
+Never promise that an open PR has already reached the hosted service or PyPI.
+
+## Create via the SDK
+
+```python
+from pathlib import Path
+from promptic_sdk import PrompticClient
+
+with PrompticClient() as client:
+    # Use a pending textGeneration or structuredOutput experiment.
+    created = client.create_evaluators(experiment_id, [{
+        "name": "Python exact answer",
+        "type": "codeFunction",
+        "scaleMin": 0,
+        "scaleMax": 1,
+        "weight": 1,
+        "config": {
+            "language": "python",  # or "javascript" with a JS source file
+            "source": Path("score.py").read_text(encoding="utf-8"),
+            "function_name": "score",  # optional; the name is fixed
+        },
+    }])
+    evaluator_id = created["data"][0]["id"]
+```
+
+Update a pending evaluator with `client.update_evaluator(experiment_id,
+evaluator_id, config={"language": "javascript", "source": js_source})`.
+Always send both `language` and `source` when replacing `config`. List with
+`client.list_evaluators(experiment_id)`. Sync and async clients use the same
+payload; await async calls. The optional `CodeFunctionConfig` TypedDict provides
+the config shape but does not execute or validate source locally.
+
+## Create via the CLI
+
+```bash
+promptic evaluators add EXPERIMENT_ID --name "Python exact answer" --type codeFunction \
+  --language python --source-file score.py --json
+promptic evaluators add EXPERIMENT_ID --name "JavaScript exact answer" --type codeFunction \
+  --language javascript --source-file score.js --json
+```
+
+The CLI reads UTF-8 text and submits it; it never imports or executes the file.
+Both flags are required for `codeFunction` and rejected on other types.
+TypeScript is not supported. No function-name or per-evaluator timeout option
+exists. `--weight`, `--scale-min`, `--scale-max`, and `--disabled` also apply.
+
+## Function contract
+
+Python (`score.py`):
+
+```python
+def score(row):
+    matches = row["expected"].strip() == row["predicted"].strip()
+    return {"score": 1.0 if matches else 0.0, "reason": "Exact comparison"}
+```
+
+JavaScript (`score.js`):
+
+```javascript
+function score(row) {
+  return row.expected.trim() === row.predicted.trim() ? 1 : 0;
+}
+```
+
+Return a finite numeric raw score, or an object with a finite numeric `score`
+and an optional short string `reason`. Booleans, NaN, and Infinity are invalid.
+No result `metadata` is supported. Match `scaleMin`/`scaleMax` to raw scores;
+weight controls the contribution to the combined score.
+
+| Row key | Meaning |
+| --- | --- |
+| `id` | Case identifier; UUIDs are strings |
+| `input` | Display input text |
+| `variables` | Original input object |
+| `expected` | Reference output |
+| `predicted` | Model output |
+| `prediction_additional` | Prediction metadata or null |
+
+Structured outputs arrive as text, not pre-parsed objects. Use only the
+restricted language operations supported by the platform. Do not suggest
+imports, external API calls, package installation, file reads/writes,
+subprocesses, or accessing environment/provider credentials. Source is limited
+to 64 KiB of UTF-8. Each batch has a five-second execution limit. Code runs in
+the platform's configured isolated sandbox, not in the SDK process; don't
+assume a particular cloud provider from the client. Sandbox usage may consume
+credits even when the function fails after execution starts. Keep secrets and
+unnecessary personal data out of source and diagnostic strings.
+
+Invalid source or a missing `score` function stops the experiment. A runtime
+error, invalid return value, or timeout produces the minimum score and
+diagnostics for affected cases. Do not interpret minimum scores with errors
+as valid model-quality failures; inspect diagnostics first.
+
+## Run and inspect
+
+1. Add representative cases and both known-good and deliberately weak outputs
+   when checking a scoring rule. Saving source alone does not verify it.
+2. For a candidate supplied by a coding agent, use evaluation-only mode
+   (`hyperparameters={"epochs": 0}` on creation) rather than automatically
+   optimizing or deploying it. Use `gpt-5.6-luna` for inexpensive test experiments.
+3. Explicitly call `client.start_experiment(experiment_id)` and poll
+   `client.get_experiment(experiment_id)` until terminal. Starting executes
+   model calls and sandbox work and can consume credits.
+4. Call `client.list_iterations(experiment_id)`, then use the **persisted**
+   iteration ID (not its number) with
+   `client.list_experiment_cases(experiment_id, iteration_id=iteration_id)`.
+   Follow `nextCursor` with identical sort/filters to inspect further pages.
+   Evaluation-only iteration number is zero; its database ID is not zero.
+5. Check each case's `evaluatorScores`, not only the aggregate. Entries include
+   `rawScore`, normalized `score`, and `additional.reason` or `additional.error`.
+   The dashboard Data tab and case details show scores and diagnostic reasons.
+   Do not claim live managed sandbox execution or billing was verified from a
+   local Docker run or mocked SDK transport tests.
+
+Equivalent result commands:
+
+```bash
+promptic experiments start EXPERIMENT_ID
+promptic experiments get EXPERIMENT_ID --json
+promptic iterations list EXPERIMENT_ID --json
+promptic experiments cases EXPERIMENT_ID --iteration-id ITERATION_ID --json
+```

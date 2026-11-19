@@ -362,6 +362,17 @@ Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJ
 
 Reading evaluators back via `list_evaluators(...)` for a tool-selection experiment also surfaces the `"toolSelection"` evaluator type, but it is not a value to pass into `create_evaluators(...)` — see `toolSelection` evaluator below.
 
+### Code function evaluators
+
+Prompt experiments additionally accept `type: "codeFunction"`. Its required
+`config` is `{"language": "python" | "javascript", "source": str,
+"function_name": "score" (optional)}`; the entry point is always `score(row)`.
+Create and update through the same methods above. This is not an Agent Gym
+evaluator kind. See [code-evaluators.md](code-evaluators.md) for the full
+SDK/CLI workflow, contract, sandbox restrictions, failure handling, and result
+inspection. Requires the platform code-evaluator deployment; CLI source-file
+flags also require the matching SDK/CLI release.
+
 ### Judge evaluator configs
 
 Promptic supports three judge evaluator types. Choose the variant that matches

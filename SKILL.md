@@ -386,6 +386,17 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
+### Custom code evaluators
+
+For custom deterministic scoring of a prompt experiment, use evaluator type
+`codeFunction` with Python or JavaScript source defining `score(row)`. Coding
+agents can create these through the SDK or the CLI; code executes in the
+platform's isolated sandbox, not in the client process. This is not an Agent
+Gym evaluator kind. Read [references/code-evaluators.md](references/code-evaluators.md)
+for creation examples, row fields, return values, sandbox restrictions, version
+requirements, and the evaluation-only candidate workflow. Do not run uploaded
+evaluator source locally or assume saving it proves it works.
+
 ### Multi-message prompts
 
 Preserve system, user, and assistant messages as an ordered message list; do not
