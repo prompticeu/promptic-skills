@@ -56,6 +56,8 @@ AgentGymClient(
     ai_application_id: str | None = None,
 )
 
+# Deprecated with FieldLevelJudge: do not add or change one. Use the targeted
+# checks ExactMatch / ContainsText / SemanticSimilarity / AIJudge instead.
 FieldScoring(
     method: Literal[
         "exact",

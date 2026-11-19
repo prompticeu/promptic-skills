@@ -316,8 +316,10 @@ existing-benchmark discovery, callback contract, resumable sessions, durable
 uploads, scoring submission, result inspection, comparison, and recovery. For
 exact public signatures, also read the Agent Optimization section of
 [references/api.md](references/api.md).
-For `FieldScoring`, select scalar or array behavior with the single `method=`
-argument. Do not use the retired `strategy` or `array_strategy` keywords.
+Score output fields with targeted checks (`ExactMatch`, `ContainsText`,
+`SemanticSimilarity`, `AIJudge`), one per field. `FieldLevelJudge` with
+`FieldScoring` is deprecated for Agent Gym: do not add or change one; benchmark
+versions that already use it keep running.
 Do not add or describe Auto Engineer or autonomous optimization loops; they are
 not part of this workflow.
 
