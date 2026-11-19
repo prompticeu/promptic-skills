@@ -103,8 +103,9 @@ single method, and carries its own name, weight, and score. Construct them with 
 `ExactMatch`, `ContainsText`, `SemanticSimilarity`, and `AIJudge` (kinds `exact_match`,
 `contains_text`, `semantic_similarity`, `ai_judge`):
 
-- `ExactMatch` — `1.0` when the value equals the expected value; lists score equal items in any
-  order.
+- `ExactMatch` — `1.0` when the value equals the expected value. A list at a named field scores
+  equal items in any order; without a field, the whole response is compared as one value, so a
+  reordered top-level list scores `0.0`.
 - `ContainsText` — `1.0` when the expected text appears in a text field.
 - `SemanticSimilarity` — embedding similarity (shown as **Embedding Similarity**); fast and cheap
   but approximate.
@@ -119,7 +120,8 @@ judges the whole list in one call. The server checks that the field exists in th
 can hold up to 64 targeted checks, including several of the same kind; their names must be unique
 among the targeted checks, and reused IDs or names raise `duplicate_evaluator_id` /
 `duplicate_evaluator_name`. Every typed evaluator accepts `enabled=False` to keep its configuration
-without running it. Targeted checks require a platform deployment that supports them.
+without running it. Targeted checks require `promptic-sdk` 1.6.0 or later and a platform
+deployment that supports them; on an older SDK the four imports fail.
 
 Use targeted checks when the structured Output contract makes failures
 decomposable. Select exact comparison for identifiers and other canonical
@@ -140,7 +142,8 @@ running and scoring as configured, and it can still be removed.
 
 Replace it with one targeted check per field. A field that was listed with
 `include=False` simply gets no check. Its array methods have no per-item
-equivalent; target the list field with `ExactMatch` or `AIJudge` instead. In particular, do not rely on `array_judge`: in Agent Gym it
+equivalent; target the list field with `ExactMatch`, `SemanticSimilarity`, or
+`AIJudge` instead. In particular, do not rely on `array_judge`: in Agent Gym it
 is scored as a structural list comparison and does not call the judge.
 
 Read an existing `FieldLevelJudge` only to understand how a stored benchmark is
@@ -223,16 +226,18 @@ execution trace with its fixed `behavior_compliance` metric.
 Common typed configurations look like this:
 
 ```python
-from promptic_sdk import (
-    AIJudge,
-    ClassificationF1,
-    ContainsText,
-    ExactMatch,
-    ExpectedBehaviorJudge,
-    SemanticSimilarity,
-)
+from promptic_sdk import ClassificationF1, ExpectedBehaviorJudge
 
 classification = ClassificationF1(field_paths=("currency",))
+
+behavior = ExpectedBehaviorJudge()
+```
+
+Targeted checks need `promptic-sdk` 1.6.0 or later, so they are imported
+separately:
+
+```python
+from promptic_sdk import AIJudge, ContainsText, ExactMatch, SemanticSimilarity
 
 # Targeted checks: one field (or the whole response) scored by one method.
 targeted = [
@@ -247,8 +252,6 @@ targeted = [
     # A list field is targeted as a whole; its items are matched by content.
     AIJudge("line_items", "Line items"),
 ]
-
-behavior = ExpectedBehaviorJudge()
 ```
 
 Pass one or more of these objects in `evaluators=[...]`. An Output-schema field
