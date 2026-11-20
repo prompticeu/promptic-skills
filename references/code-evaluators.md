@@ -83,10 +83,8 @@ weight controls the contribution to the combined score.
 | --- | --- |
 | `id` | Case identifier; UUIDs are strings |
 | `input_variables` | Original named input object |
-| `input_text` | Flattened input variables, not the rendered model prompt |
 | `expected` | Reference output |
 | `predicted` | Model output |
-| `prediction_additional` | Prediction metadata or null |
 
 Structured outputs arrive as text, not pre-parsed objects. Use only the
 restricted language operations supported by the platform. Do not suggest
@@ -100,8 +98,9 @@ unnecessary personal data out of source and diagnostic strings.
 
 In Python the row is a dictionary: use `row["id"]` and
 `row["input_variables"]["question"]`, not `row.id`. JavaScript uses `row.id` and
-`row.input_variables.question`. Row contract version 2 replaces `input` and
-`variables` with the names above; update existing source explicitly. Do not
+`row.input_variables.question`. Row contract version 3 contains only the four
+fields above. It replaces the old `input` and `variables` names and removes
+flattened input and miscellaneous prediction metadata; update existing source explicitly. Do not
 silently rewrite historical results or promise backwards-compatible aliases.
 
 Invalid source, a missing `score`, runtime errors, invalid return values, and
@@ -136,8 +135,7 @@ promptic evaluators test --language python --source-file score.py --row-file row
 promptic evaluators test-result TEST_ID --json
 ```
 
-`row.json` has `input_variables`, `expected`, and `predicted`; `id` and
-`prediction_additional` are optional. `input_text` is derived by the worker.
+`row.json` has `input_variables`, `expected`, and `predicted`; only `id` is optional.
 JavaScript uses `--language javascript`. Files must be UTF-8 and each at most
 64 KiB in the CLI; the API request limit is 128 KiB. Tests use sandbox compute
 and may consume credits. A client timeout or Ctrl-C does not cancel remote
