@@ -337,6 +337,15 @@ promptic agent-gym submission-cancel "$BENCHMARK_ID" "$SUBMISSION_ID" --yes
 - Cancel only an unsubmitted session that should accept no more predictions.
 - If required evaluator evidence is missing or evaluation fails, inspect the
   run's eligibility state rather than treating a partial score as official.
+- A pre-submit trace-finalization abort — a successful case left without required
+  trace evidence, or trace export, flush, or resolution that could not finish
+  before final submission — is reported to the platform by a supporting runner and
+  closes the upload as a terminal submission failure, marking the run ineligible
+  without scoring. `submission-status` then reports `failed` with the reason and the
+  dashboard shows "Submission failed". Uploaded predictions remain available for
+  inspection but cannot be resumed or retried; fix the cause and start a new session
+  with a new creation idempotency key. Final submission and failure reporting are
+  mutually exclusive, so whichever is accepted first wins.
 
 ## Completion checklist
 
