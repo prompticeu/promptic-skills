@@ -386,6 +386,22 @@ with PrompticClient() as client:
     print(prompt["prompt"])
 ```
 
+### Custom code evaluators
+
+For custom deterministic scoring of a prompt experiment, use evaluator type
+`codeFunction` with Python or JavaScript source defining `score(row)`. Coding
+agents can create these through the SDK or the CLI; code executes in the
+platform's isolated sandbox, not in the client process. This is not an Agent
+Gym evaluator kind. With the matching SDK/CLI and server release, use
+`test_code_evaluator()` / `get_code_evaluator_test()` or `promptic evaluators test`
+/ `test-result` to probe explicit sample outputs before starting a model run.
+Rows contain only `id`, `input_variables`, `expected`, and `predicted`; Python uses dictionary keys such as
+`row["input_variables"]`. Function errors fail evaluation, not quality scores.
+Read [references/code-evaluators.md](references/code-evaluators.md)
+for creation examples, row fields, return values, sandbox restrictions, version
+requirements, and the evaluation-only candidate workflow. Do not run uploaded
+evaluator source locally or assume saving it proves it works.
+
 ### Multi-message prompts
 
 Preserve system, user, and assistant messages as an ordered message list; do not
@@ -544,5 +560,5 @@ Enums (Literal types):
 - `ExperimentStatus`: `"pending" | "scheduled" | "running" | "canceling" | "canceled" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` experiments are created with the dedicated `create_tool_selection_experiment(...)` method, **not** by passing a `task_type` to `create_experiment(...)`; the value is also surfaced by `get_experiment(...)` / `list_experiments(...)` for existing tool-selection / MCP-optimization experiments.
-- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.
+- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "codeFunction" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"` — `"promptic"` is the legacy v1 value retained for historical experiments; use `"prompticV2"` for new ones.

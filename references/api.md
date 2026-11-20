@@ -358,9 +358,34 @@ client.update_evaluator(experiment_id: str, evaluator_id: str, **data) -> Evalua
 client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
-Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput"|"codeFunction", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
 
 Reading evaluators back via `list_evaluators(...)` for a tool-selection experiment also surfaces the `"toolSelection"` evaluator type, but it is not a value to pass into `create_evaluators(...)` — see `toolSelection` evaluator below.
+
+### Code function evaluators
+
+Prompt experiments additionally accept `type: "codeFunction"`. Its required
+`config` is `{"language": "python" | "javascript", "source": str,
+"function_name": "score" (optional)}`; the entry point is always `score(row)`.
+Create and update through the same methods above. This is not an Agent Gym
+evaluator kind. See [code-evaluators.md](code-evaluators.md) for the full
+SDK/CLI workflow, contract, sandbox restrictions, failure handling, and result
+inspection. Requires the platform code-evaluator deployment; CLI source-file
+flags also require the matching SDK/CLI release.
+
+```python
+client.test_code_evaluator(config: CodeFunctionConfig, row: CodeFunctionTestRow) -> dict
+client.get_code_evaluator_test(test_id: str) -> dict
+```
+
+Both also exist on the async client. Probes execute one explicit sample in the
+configured sandbox and may consume credits; they make no model call and save
+no evaluator. Poll the returned `id` until `completed` or `failed`. Row fields
+are `input_variables`, `expected`, `predicted`, with optional `id`. No other
+row fields are exposed. This replaces the ambiguous
+`input`/`variables` keys. Runtime and syntax errors fail evaluations rather than
+becoming minimum quality scores. See the code evaluator reference for safe
+diagnostic fields and CLI test commands.
 
 ### Judge evaluator configs
 
