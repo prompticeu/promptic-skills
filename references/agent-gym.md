@@ -307,7 +307,11 @@ and `insufficient_evidence` results indicate missing score coverage even when
 other metrics succeeded. Verifier metrics appear independently and expose
 `source_evaluator_id` plus `metric_key`; do not parse the opaque result ID.
 Per-field means use a `succeeded_only` basis and therefore need not reconcile
-with an official aggregate that zero-fills failed cases.
+with an official aggregate that zero-fills failed cases. A targeted check with no
+value on either side (the field is missing or `null` in both the expected and the
+agent output) is not applicable: it is reported as `skipped` with no score and left
+out of the evaluator's average and the run mean rather than zero-filled, so these
+skipped results are an intentional exclusion, not a coverage gap to chase.
 
 ## Promote the chosen variant
 
