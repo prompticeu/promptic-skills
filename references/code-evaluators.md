@@ -123,8 +123,10 @@ probe = client.test_code_evaluator(
 state = client.get_code_evaluator_test(probe["id"])
 ```
 
-Poll `get_code_evaluator_test()` until `completed` or `failed`; do not repeatedly
-submit new probes while polling. `result` contains `score`/`reason` or safe
+Poll `get_code_evaluator_test()` every 2 seconds for at most 90 seconds, stopping
+at `completed` or `failed`. If the deadline expires, report the test ID and last
+status, return control, and do not submit a replacement probe or imply it was
+cancelled. `result` contains `score`/`reason` or safe
 `error`, `error_type`, `line`, `column`; `errorMessage` is the readable failure.
 Repeat with a deliberately incorrect `predicted` value to check the low-score
 path. Keep distinct predictions in distinct probe jobs. `CodeFunctionTestRow`
@@ -156,7 +158,11 @@ error markers. Editing the source clears its displayed result, not the remote jo
    (`hyperparameters={"epochs": 0}` on creation) rather than automatically
    optimizing or deploying it. Use `gpt-5.6-luna` for inexpensive test experiments.
 3. Explicitly call `client.start_experiment(experiment_id)` and poll
-   `client.get_experiment(experiment_id)` until terminal. Starting executes
+   `client.get_experiment(experiment_id)` every 5 seconds for at most 10 minutes,
+   stopping at `completed`, `failed`, or `canceled`. Use a monotonic deadline,
+   as in `references/prompt-evaluation.md`. If the deadline expires, report the
+   experiment ID and latest status and return control. Do not restart, cancel,
+   or claim completion merely because local polling timed out. Starting executes
    model calls and sandbox work and can consume credits.
 4. Call `client.list_iterations(experiment_id)`, then use the **persisted**
    iteration ID (not its number) with
