@@ -1,9 +1,11 @@
 # Python and JavaScript code evaluators
 
-Use `codeFunction` for custom deterministic scoring in **prompt experiments**.
-Do not use it as an Agent Gym evaluator `kind`, as an agent implementation, or as
-a way to run arbitrary tools. Prefer built-in exact/contains checks when they
-already express the requirement.
+Use `codeFunction` for custom deterministic scoring in **prompt experiments**,
+and the `CodeFunction` evaluator (CLI kind `code_function`) in **Agent
+Optimization benchmarks**; the two receive different rows (see
+[Agent Optimization benchmarks](#agent-optimization-benchmarks)). Do not use a
+code function as an agent implementation or as a way to run arbitrary tools.
+Prefer built-in exact/contains checks when they already express the requirement.
 
 Requires a platform deployment containing code evaluator support (PRO-201).
 The SDK's existing sync/async `create_evaluators()` and `update_evaluator()`
@@ -184,3 +186,61 @@ promptic experiments get EXPERIMENT_ID --json
 promptic iterations list EXPERIMENT_ID --json
 promptic experiments cases EXPERIMENT_ID --iteration-id ITERATION_ID --json
 ```
+
+## Agent Optimization benchmarks
+
+Benchmarks use the typed `CodeFunction(source, language="python", name=...,
+weight=1, required=False, scale_min=0, scale_max=1)` in `evaluators=[...]`, or
+a `code_function` entry in `agent.json`; see the Code Function section of
+[agent-benchmark.md](agent-benchmark.md) for when to choose it and full
+examples. It is repeatable (up to 16 per benchmark, unique names) and has no
+`threshold`. Requires an SDK/CLI release with Agent Optimization code functions:
+check that `from promptic_sdk import CodeFunction` works first.
+
+The row differs from experiments and holds native JSON values:
+
+| Row key | Meaning |
+| --- | --- |
+| `id` | Test case identifier |
+| `inputs` | Case inputs, an object keyed by input name |
+| `output` | Submitted Agent output, shaped by the Output schema |
+| `expected_output` | Expected Output object, or `None`/`null` |
+| `expected_behavior` | Expected Behavior text, or `None`/`null` |
+
+```python
+def score(row):
+    output = row["output"] or {}
+    expected = row["expected_output"] or {}
+    return 1.0 if output.get("invoice_id") == expected.get("invoice_id") else 0.0
+```
+
+Failure handling also differs: a runtime error, invalid return value or timeout
+fails only that case (with a safe error code, exception type and line), and the
+remaining cases still score. Invalid source or a missing `score` fails every
+case of that evaluator. A failed case counts as unscored, not as a low score;
+with `required=True` it marks the run ineligible. Fix the function and
+re-evaluate existing runs; the submissions do not need to be rerun. Platform
+validation rejects outputs that do not match the Output schema before scoring,
+so a function only sees schema-valid outputs.
+
+Probe a benchmark function with the same test endpoint and the Agent
+Optimization row contract:
+
+```python
+probe = client.test_code_evaluator(
+    {"language": "python", "source": Path("checks/line_items.py").read_text(encoding="utf-8")},
+    {"inputs": {"invoice_text": "..."}, "output": {"total": 7}, "expected_output": {"total": 7}},
+    row_contract="agent_gym",
+)
+state = client.get_code_evaluator_test(probe["id"])
+```
+
+```bash
+promptic evaluators test --language python --source-file checks/line_items.py \
+  --row-file sample-case.json --row-contract agent_gym --json
+```
+
+`AgentGymCodeFunctionTestRow` is exported for typed samples; `expected_output`,
+`expected_behavior`, and `id` are optional. Polling, limits and credit use are
+the same as for experiment probes above. The dashboard's **Test function**
+action prefills the sample from the benchmark's first case.

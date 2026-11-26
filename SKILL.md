@@ -391,12 +391,18 @@ with PrompticClient() as client:
 For custom deterministic scoring of a prompt experiment, use evaluator type
 `codeFunction` with Python or JavaScript source defining `score(row)`. Coding
 agents can create these through the SDK or the CLI; code executes in the
-platform's isolated sandbox, not in the client process. This is not an Agent
-Gym evaluator kind. With the matching SDK/CLI and server release, use
+platform's isolated sandbox, not in the client process. With the matching
+SDK/CLI and server release, use
 `test_code_evaluator()` / `get_code_evaluator_test()` or `promptic evaluators test`
 / `test-result` to probe explicit sample outputs before starting a model run.
-Rows contain only `id`, `input_variables`, `expected`, and `predicted`; Python uses dictionary keys such as
+Experiment rows contain only `id`, `input_variables`, `expected`, and `predicted`; Python uses dictionary keys such as
 `row["input_variables"]`. Function errors fail evaluation, not quality scores.
+
+Agent Optimization benchmarks accept the same functions as the repeatable
+`CodeFunction` evaluator (CLI kind `code_function`). Its row is different:
+`id`, `inputs`, `output`, `expected_output`, and `expected_behavior`, all as
+native JSON values, and a function error fails only that case. See the Code
+Function section of [references/agent-benchmark.md](references/agent-benchmark.md).
 Read [references/code-evaluators.md](references/code-evaluators.md)
 for creation examples, row fields, return values, sandbox restrictions, version
 requirements, and the evaluation-only candidate workflow. Do not run uploaded
