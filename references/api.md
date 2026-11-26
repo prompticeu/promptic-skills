@@ -185,6 +185,27 @@ must not configure a metric that already has non-default inline scoring.
 `ExpectedBehaviorJudge` accepts an optional model and a `behavior_compliance`
 metric binding.
 
+```python
+CodeFunction(
+    source: str,
+    language: Literal["python", "javascript"] = "python",
+    name: str | None = None,
+    description: str | None = None,
+    weight: float = 1.0,
+    required: bool = False,
+    scale_min: float = 0.0,
+    scale_max: float = 1.0,
+    *,
+    id: str | None = None,
+    enabled: bool = True,
+)
+```
+
+`CodeFunction` is repeatable (up to 16 per benchmark, unique names) and has no
+`threshold`. Its `score(row)` receives `id`, `inputs`, `output`,
+`expected_output`, and `expected_behavior` as native JSON values; see
+[code-evaluators.md](code-evaluators.md#agent-optimization-benchmarks).
+
 Result inspection and recovery:
 
 ```python
@@ -367,22 +388,30 @@ Reading evaluators back via `list_evaluators(...)` for a tool-selection experime
 Prompt experiments additionally accept `type: "codeFunction"`. Its required
 `config` is `{"language": "python" | "javascript", "source": str,
 "function_name": "score" (optional)}`; the entry point is always `score(row)`.
-Create and update through the same methods above. This is not an Agent Gym
-evaluator kind. See [code-evaluators.md](code-evaluators.md) for the full
-SDK/CLI workflow, contract, sandbox restrictions, failure handling, and result
-inspection. Requires the platform code-evaluator deployment; CLI source-file
-flags also require the matching SDK/CLI release.
+Create and update through the same methods above. Agent Optimization
+benchmarks use the typed `CodeFunction` evaluator instead (see the Agent
+Optimization section above). See [code-evaluators.md](code-evaluators.md) for
+the full SDK/CLI workflow, contract, sandbox restrictions, failure handling,
+and result inspection. Requires the platform code-evaluator deployment; CLI
+source-file flags also require the matching SDK/CLI release.
 
 ```python
-client.test_code_evaluator(config: CodeFunctionConfig, row: CodeFunctionTestRow) -> dict
+client.test_code_evaluator(
+    config: CodeFunctionConfig,
+    row: CodeFunctionTestRow | AgentGymCodeFunctionTestRow,
+    *,
+    row_contract: Literal["experiment", "agent_gym"] = "experiment",
+) -> dict
 client.get_code_evaluator_test(test_id: str) -> dict
 ```
 
 Both also exist on the async client. Probes execute one explicit sample in the
 configured sandbox and may consume credits; they make no model call and save
-no evaluator. Poll the returned `id` until `completed` or `failed`. Row fields
-are `input_variables`, `expected`, `predicted`, with optional `id`. No other
-row fields are exposed. This replaces the ambiguous
+no evaluator. Poll the returned `id` until `completed` or `failed`. Experiment
+row fields are `input_variables`, `expected`, `predicted`, with optional `id`.
+With `row_contract="agent_gym"` the row has `inputs` and `output`, with
+optional `id`, `expected_output`, and `expected_behavior`. No other row fields
+are exposed. This replaces the ambiguous
 `input`/`variables` keys. Runtime and syntax errors fail evaluations rather than
 becoming minimum quality scores. See the code evaluator reference for safe
 diagnostic fields and CLI test commands.

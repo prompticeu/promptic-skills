@@ -66,6 +66,7 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
 | `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with scalar method `exact`, `contains`, `embedding`, or `judge`, or array method `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for `judge` and `array_judge`. |
+| `CodeFunction` | A deterministic rule decides correctness: totals that must add up, fields that depend on each other, required formats, or checks that need no expected value. | Write `score(row)` in Python or JavaScript; set the score range when raw scores are not 0–1. Repeatable, up to 16 per benchmark with unique names. |
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
 
@@ -75,9 +76,11 @@ Choose the least complex evaluator that can measure the requirement:
    representative case set.
 2. Choose `FieldLevelJudge` when the Output contract identifies the values to
    check and each field can have an explicit comparison rule.
-3. Add `ExpectedBehaviorJudge` when a case has a narrow execution requirement
+3. Add a `CodeFunction` when a rule spans several fields or inputs, or needs
+   arithmetic or a format check, that no single comparison expresses.
+4. Add `ExpectedBehaviorJudge` when a case has a narrow execution requirement
    that must be verified from its trace.
-4. Choose `VerifierAgent` when evaluation requires a multi-step investigation
+5. Choose `VerifierAgent` when evaluation requires a multi-step investigation
    across files, outputs, expected evidence, or traces.
 
 ### Classification F1
@@ -102,6 +105,46 @@ give that field specific instructions.
 
 This is preferable to holistic judging when it can express the contract: it is
 cheaper, easier to calibrate, and reveals exactly which output field regressed.
+
+### Code Function
+
+`CodeFunction` scores each case with a deterministic `score(row)` function in
+Python or JavaScript that runs in the platform sandbox, never in the client.
+Use it for business rules a field comparison cannot express: line items that
+must sum to a total, an end date after a start date, an ID format, a value that
+depends on the input, or a requirement that has no expected value at all. It
+makes no model call, so it is cheap and repeatable; add one function per rule
+so each regression stays diagnosable.
+
+The row holds native JSON values, not text:
+
+| Key | Value |
+| --- | --- |
+| `id` | Test case identifier |
+| `inputs` | The case inputs, always an object keyed by input name |
+| `output` | The submitted Agent output, shaped by the Output schema |
+| `expected_output` | The case's Expected Output object, or `None`/`null` |
+| `expected_behavior` | The case's Expected Behavior text, or `None`/`null` |
+
+Return a finite number or `{"score": number, "reason": str}`. Raw scores are
+normalized to 0–1 with `scale_min`/`scale_max` (default 0 and 1) and the
+`reason` is shown with each case result. A runtime error, invalid return value,
+or timeout fails only that case, with a safe error code, exception type and
+line; invalid source or a missing `score` fails every case of that evaluator.
+Mark it `required=True` only when a case it cannot score should make the run
+ineligible; a low score never counts as a failure.
+
+Generated files reach `output` as artifact references, not file contents, and
+execution traces are not passed; use `VerifierAgent` or `ExpectedBehaviorJudge`
+for those. Source is limited to 64 KiB, and imports, network, filesystem,
+subprocesses and provider credentials are unavailable. Sandbox compute is
+billed per batch of up to 100 cases. Probe the function on one sample case
+before saving it; see [code-evaluators.md](code-evaluators.md).
+
+Requires a platform deployment with Agent Optimization code functions and
+`promptic-sdk` 1.9.0 or later. Check that `from promptic_sdk import CodeFunction`
+works before using it, and never promise that an open PR has reached the hosted
+service or PyPI.
 
 ### Expected Behavior Judge
 
@@ -210,6 +253,46 @@ Pass one or more of these objects in `evaluators=[...]`. For
 `FieldLevelJudge`, omitted Output-schema fields do not receive an explicit
 override; use `include=False` when a listed field is intentionally excluded.
 Use dotted field paths for nested fields.
+
+Code functions take the source as a string; read it from a file you keep next
+to the benchmark definition:
+
+```python
+from pathlib import Path
+
+from promptic_sdk import CodeFunction
+
+line_items = CodeFunction(
+    Path("checks/line_items.py").read_text(encoding="utf-8"),
+    name="Line items sum to total",
+    weight=2,
+)
+positive_total = CodeFunction(
+    "function score(row) { return (row.output?.total ?? 0) > 0 ? 1 : 0 }",
+    "javascript",
+    name="Positive total",
+)
+```
+
+```python
+# checks/line_items.py
+def score(row):
+    output = row["output"] or {}
+    total = sum(item.get("amount", 0) for item in output.get("line_items") or [])
+    if abs(total - output.get("total", 0)) < 0.01:
+        return {"score": 1.0, "reason": "Line items sum to the total"}
+    return {"score": 0.0, "reason": f"Line items sum to {total:.2f}"}
+```
+
+In `agent.json`, a code function entry uses kind `code_function` with either
+inline `source` or a `sourceFile` path relative to the configuration file;
+`language` defaults to `python`, and `scaleMin`, `scaleMax`, `weight`,
+`required`, `id`, `description`, and `enabled` are optional (`threshold` is
+rejected):
+
+```json
+{"kind": "code_function", "name": "Line items sum to total", "sourceFile": "checks/line_items.py", "weight": 2}
+```
 
 ## Configure a benchmark with Python
 
