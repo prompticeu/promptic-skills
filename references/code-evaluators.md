@@ -219,11 +219,12 @@ fails only that case (with a safe error code, exception type and line), and the
 remaining cases still score. Invalid source or a missing `score` fails every
 case of that evaluator. A failed case counts as unscored, not as a low score;
 with `required=True` it marks the run ineligible. Fix the function and
-re-evaluate existing runs; the submissions do not need to be rerun. The
-submitted `output` is passed as-is and is not re-validated against the Output
-schema before scoring — in Agent Optimization it may be an object, list, string,
-number, or absent — so read it defensively (for example `row["output"] or {}`)
-to keep a malformed output a single-case failure rather than an unhandled error.
+re-evaluate existing runs; the submissions do not need to be rerun. When the
+Agent has an Output schema, external submissions are rejected at upload
+(`prediction_contract_invalid`) unless each successful output is an object that
+matches it. Without an Output schema, `output` is any JSON value (object, list,
+string, number, or null). Read it defensively either way (for example
+`row["output"] or {}`), so an unexpected shape fails only that case.
 
 Probe a benchmark function with the same test endpoint and the Agent
 Optimization row contract:
