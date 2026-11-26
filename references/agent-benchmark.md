@@ -141,9 +141,10 @@ subprocesses and provider credentials are unavailable. Sandbox compute is
 billed per batch of up to 100 cases. Probe the function on one sample case
 before saving it; see [code-evaluators.md](code-evaluators.md).
 
-Requires a platform deployment and an SDK/CLI release with Agent Optimization
-code functions. Check that `from promptic_sdk import CodeFunction` works before
-using it, and never promise that an open PR has reached the hosted service or PyPI.
+Requires a platform deployment with Agent Optimization code functions and
+`promptic-sdk` 1.9.0 or later. Check that `from promptic_sdk import CodeFunction`
+works before using it, and never promise that an open PR has reached the hosted
+service or PyPI.
 
 ### Expected Behavior Judge
 

@@ -194,8 +194,8 @@ weight=1, required=False, scale_min=0, scale_max=1)` in `evaluators=[...]`, or
 a `code_function` entry in `agent.json`; see the Code Function section of
 [agent-benchmark.md](agent-benchmark.md) for when to choose it and full
 examples. It is repeatable (up to 16 per benchmark, unique names) and has no
-`threshold`. Requires an SDK/CLI release with Agent Optimization code functions:
-check that `from promptic_sdk import CodeFunction` works first.
+`threshold`. Requires `promptic-sdk` 1.9.0 or later: check that
+`from promptic_sdk import CodeFunction` works first.
 
 The row differs from experiments and holds native JSON values:
 
