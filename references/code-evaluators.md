@@ -219,9 +219,11 @@ fails only that case (with a safe error code, exception type and line), and the
 remaining cases still score. Invalid source or a missing `score` fails every
 case of that evaluator. A failed case counts as unscored, not as a low score;
 with `required=True` it marks the run ineligible. Fix the function and
-re-evaluate existing runs; the submissions do not need to be rerun. Platform
-validation rejects outputs that do not match the Output schema before scoring,
-so a function only sees schema-valid outputs.
+re-evaluate existing runs; the submissions do not need to be rerun. The
+submitted `output` is passed as-is and is not re-validated against the Output
+schema before scoring — in Agent Optimization it may be an object, list, string,
+number, or absent — so read it defensively (for example `row["output"] or {}`)
+to keep a malformed output a single-case failure rather than an unhandled error.
 
 Probe a benchmark function with the same test endpoint and the Agent
 Optimization row contract:
