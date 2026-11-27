@@ -521,7 +521,7 @@ promptic traces stats               # Aggregated tracing stats
 promptic components list            # List AI components
 promptic components create <name>   # Create a component
 promptic components get <id>        # Get component details
-promptic components delete <id>     # Delete a component
+promptic components delete <id>     # Delete a component (blocked for an Agent Optimization component with active runs/submissions/loops or referenced datasets)
 
 # Experiments
 promptic experiments list           # List experiments
