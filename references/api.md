@@ -264,6 +264,13 @@ client.update_component_rules(component_id: str, brief: OptimizationBrief, *, ex
 client.delete_component(component_id: str) -> None
 ```
 
+`delete_component` removes the component and all of its data. For an Agent
+Optimization component it raises `PrompticAPIError` with status `409`
+(`component_deletion_blocked`) while the benchmark it owns has active runs,
+external submissions, or optimization loops, or while experiments or evaluations
+reference its benchmark dataset. Let the in-progress work finish or remove the
+referencing experiments and evaluations, then retry.
+
 ## Experiments
 
 ```python
