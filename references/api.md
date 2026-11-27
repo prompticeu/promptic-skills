@@ -56,19 +56,32 @@ AgentGymClient(
     ai_application_id: str | None = None,
 )
 
-FieldScoring(
-    method: Literal[
-        "exact",
-        "embedding",
-        "contains",
-        "judge",
-        "array_exact",
-        "array_similarity",
-        "array_judge",
-    ] = "exact",
-    include: bool = True,
-    judge_instructions: str | None = None,
+# Targeted checks: one Output field, or the whole response when field is None.
+# ExactMatch, ContainsText and SemanticSimilarity share this signature.
+ExactMatch(
+    field: str | None = None,
+    name: str | None = None,
+    description: str | None = None,
     weight: float = 1.0,
+    required: bool = False,
+    threshold: float | None = None,
+    *,
+    id: str | None = None,
+    enabled: bool = True,
+)
+
+AIJudge(
+    field: str | None = None,
+    name: str | None = None,
+    description: str | None = None,
+    weight: float = 1.0,
+    required: bool = False,
+    threshold: float | None = None,
+    *,
+    id: str | None = None,
+    enabled: bool = True,
+    instructions: str | None = None,
+    model: str | None = None,
 )
 
 client.download_dataset(
@@ -379,7 +392,7 @@ client.update_evaluator(experiment_id: str, evaluator_id: str, **data) -> Evalua
 client.delete_evaluator(experiment_id: str, evaluator_id: str) -> None
 ```
 
-Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"similarity"|"structuredOutput"|"codeFunction", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
+Evaluator dict format: `{"name": str, "type": "f1"|"referenceJudge"|"comparisonJudge"|"generalJudge"|"exactMatch"|"containsText"|"semanticSimilarity"|"aiJudge"|"codeFunction"|"similarity"|"structuredOutput", "weight": float, "description": str (optional), "config": dict (optional), "scaleMin": float (optional), "scaleMax": float (optional)}`.
 
 Reading evaluators back via `list_evaluators(...)` for a tool-selection experiment also surfaces the `"toolSelection"` evaluator type, but it is not a value to pass into `create_evaluators(...)` — see `toolSelection` evaluator below.
 
@@ -456,9 +469,39 @@ client.create_evaluators(exp_id, [
 ])
 ```
 
+### Targeted check config
+
+`exactMatch`, `containsText`, `semanticSimilarity`, and `aiJudge` each score one
+output field, or the whole response, and share one optional `config`:
+`field` (dotted path such as `user.name`; omit it for the whole response),
+`schema_definition` (the output JSON schema, used to check that `field` exists
+and suits the method), and `instructions` (`aiJudge` only, extra guidance on top
+of the built-in equivalence rubric). Unknown keys are rejected, and paths into
+list items (`people[].name`) are not supported; target the list instead. Add one
+evaluator per field, each with its own `name` and `weight`:
+
+```python
+client.create_evaluators(exp_id, [
+    {"name": "Invoice ID", "type": "exactMatch", "weight": 2,
+     "config": {"field": "invoice_id", "schema_definition": output_schema}},
+    {"name": "Summary", "type": "aiJudge",
+     "config": {"field": "summary", "schema_definition": output_schema,
+                "instructions": "Accept paraphrases, but the totals must match."}},
+])
+```
+
+The CLI equivalent is `promptic evaluators add EXP_ID -n "Invoice ID" -t
+exactMatch --field invoice_id`; `--instructions` applies to `aiJudge` only.
+`aiJudge` uses the judge model and `semanticSimilarity` uses embeddings, so both
+incur model usage; `exactMatch` and `containsText` do not. Requires
+`promptic-sdk` 1.8.0 or later for the CLI flags and typed literals.
+
 ### `structuredOutput` evaluator config
 
-Supported `config` keys for the `structuredOutput` type:
+`structuredOutput` (Schema match) is for existing evaluators only: the dashboard
+no longer offers it, and new setups use one targeted check per output field
+instead. The API still accepts it, so the keys below describe what existing
+evaluators use. Supported `config` keys for the `structuredOutput` type:
 
 - `schema_definition` (dict): JSON schema describing the prediction shape. Drives default per-field scoring — strings → embedding similarity, enums/booleans/integers → exact, numbers → tolerance, nested objects → recursive, arrays → content-aligned soft F1 (not positional).
 - `fields` (dict, optional): per-field overrides keyed by dotted JSON path. Each entry accepts:
