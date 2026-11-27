@@ -316,8 +316,11 @@ existing-benchmark discovery, callback contract, resumable sessions, durable
 uploads, scoring submission, result inspection, comparison, and recovery. For
 exact public signatures, also read the Agent Optimization section of
 [references/api.md](references/api.md).
-For `FieldScoring`, select scalar or array behavior with the single `method=`
-argument. Do not use the retired `strategy` or `array_strategy` keywords.
+Score Output fields with one targeted check per field (`ExactMatch`,
+`ContainsText`, `SemanticSimilarity`, `AIJudge`). `FieldLevelJudge` (Schema
+match) and its `FieldScoring` helper are deprecated and rejected for new or
+changed evaluators; never recommend them, and migrate existing ones as the
+benchmark reference describes.
 Do not add or describe Auto Engineer or autonomous optimization loops; they are
 not part of this workflow.
 
@@ -536,6 +539,7 @@ promptic experiments continue <id> [--start]                 # Clone, seed initi
 # Evaluators
 promptic evaluators list <exp-id>                # List evaluators
 promptic evaluators add <exp-id> -n <name> -t <type>  # Add evaluator
+promptic evaluators add <exp-id> -n "Answer" -t exactMatch --field answer  # Targeted check on one output field
 promptic evaluators delete <exp-id> <eval-id>    # Delete an evaluator
 
 # Iterations
@@ -566,5 +570,5 @@ Enums (Literal types):
 - `ExperimentStatus`: `"pending" | "scheduled" | "running" | "canceling" | "canceled" | "completed" | "failed"`
 - `ModelProvider`: `"openai" | "openrouter" | "custom" | "google"`
 - `TaskType`: `"classification" | "textGeneration" | "structuredOutput" | "toolSelection"` — `"toolSelection"` experiments are created with the dedicated `create_tool_selection_experiment(...)` method, **not** by passing a `task_type` to `create_experiment(...)`; the value is also surfaced by `get_experiment(...)` / `list_experiments(...)` for existing tool-selection / MCP-optimization experiments.
-- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "codeFunction" | "toolSelection"` — the `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.
+- `EvaluatorType`: `"f1" | "referenceJudge" | "comparisonJudge" | "generalJudge" | "similarity" | "structuredOutput" | "exactMatch" | "containsText" | "semanticSimilarity" | "aiJudge" | "codeFunction" | "toolSelection"` — `similarity` and `structuredOutput` (Schema match) remain for existing evaluators only; new setups use `aiJudge` and one targeted check per output field instead. The `toolSelection` evaluator is attached automatically by `create_tool_selection_experiment(...)`; it is not a value to pass into `create_evaluators(...)`, but it is surfaced by `list_evaluators(...)` on a tool-selection experiment.
 - `OptimizerType`: `"promptic" | "prompticV2" | "miproV2" | "bootstrapFewShot" | "gepa"` — `"promptic"` is the legacy v1 value retained for historical experiments; use `"prompticV2"` for new ones.

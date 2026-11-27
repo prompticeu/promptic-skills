@@ -65,7 +65,7 @@ Use the simplest evaluator that measures the intended outcome reliably.
 | Evaluator | Use it when | Required setup |
 | --- | --- | --- |
 | `ClassificationF1` | One or more Output-schema enum fields contain categorical labels and class-level precision/recall matters. | List the enum field paths. Cases need expected values for them. |
-| `FieldLevelJudge` | The Output schema has fields that should be compared independently. | Configure each included field with scalar method `exact`, `contains`, `embedding`, or `judge`, or array method `array_exact`, `array_similarity`, or `array_judge`. Add field-specific judge instructions only for `judge` and `array_judge`. |
+| Targeted checks: `ExactMatch`, `ContainsText`, `SemanticSimilarity`, `AIJudge` | An Output field, or the whole response, can be compared with its expected value using one method. | Add one check per field to score, each with its own `field` path, name and weight; omit `field` to score the whole response. `AIJudge` takes optional `instructions`. Repeatable, up to 64 per benchmark with unique names. |
 | `CodeFunction` | A deterministic rule decides correctness: totals that must add up, fields that depend on each other, required formats, or checks that need no expected value. | Write `score(row)` in Python or JavaScript; set the score range when raw scores are not 0–1. Repeatable, up to 16 per benchmark with unique names. |
 | `VerifierAgent` | Success requires the most flexible, holistic inspection of outputs, generated files, case requirements, or traces. | Define one to eight explicit metrics with instructions and optional scoring weight or threshold, select evidence, and set an investigation budget when the default is unsuitable. |
 | `ExpectedBehaviorJudge` | Tool selection, execution order, retries, or other case-specific trace behavior is itself part of correctness. | Write Expected Behavior on each relevant case and ensure variants submit trace IDs. Optionally select a model and configure the fixed `behavior_compliance` metric binding. |
@@ -74,8 +74,9 @@ Choose the least complex evaluator that can measure the requirement:
 
 1. Choose `ClassificationF1` for categorical enum fields measured across a
    representative case set.
-2. Choose `FieldLevelJudge` when the Output contract identifies the values to
-   check and each field can have an explicit comparison rule.
+2. Add one targeted check per Output field when the Output contract
+   identifies the values to check and each field can be compared with its
+   expected value.
 3. Add a `CodeFunction` when a rule spans several fields or inputs, or needs
    arithmetic or a format check, that no single comparison expresses.
 4. Add `ExpectedBehaviorJudge` when a case has a narrow execution requirement
@@ -94,17 +95,45 @@ Do not use F1 for generated text, arbitrary extracted strings, continuous
 values, or explanations. It measures whether the category is correct, not why
 the Agent chose it or whether its execution was appropriate.
 
-### Field-level judge
+### Targeted checks
 
-Use field-level evaluation when the structured Output contract makes failures
-decomposable. Select exact comparison for identifiers and other canonical
-values, containment for required content, semantic comparison for equivalent
-language, and the corresponding array methods for lists. Reserve a per-field
-LLM judge for a field whose correctness genuinely requires interpretation, and
-give that field specific instructions.
+A targeted check scores one Output field, or the whole response, with one
+method, and reports its own score and weight. Use one check per field when the
+structured Output contract makes failures decomposable:
+
+| Check | Method | Use it for |
+| --- | --- | --- |
+| `ExactMatch` | 1 when equal, else 0. Numbers use a small tolerance; lists score the overlap of exactly equal items as F1, in any order. No model call. | IDs, enums, numbers, booleans, and lists of these |
+| `ContainsText` | 1 when the expected text appears, ignoring case and surrounding whitespace. No model call. | Required phrases, citations, URLs |
+| `SemanticSimilarity` | Embedding similarity from 0 to 1; lists pair items by content, in any order, as a soft F1. Shown as Embedding Similarity. | A cheap, approximate signal for free text |
+| `AIJudge` | A model judges whether the value conveys the same essential information as expected, from 0 to 1. Optional `instructions` add domain rules; `model` picks a judge model. | Text, objects, or lists whose correctness needs interpretation |
+
+Embedding similarity is approximate: a negation or a wrong number in otherwise
+identical text still scores high, so use `AIJudge` when correctness matters.
+`field` is a dotted path such as `vendor.name`; paths into list items such as
+`line_items[].amount` are rejected, so target the list (`line_items`) instead.
+Object fields are not checked as a whole; add a check per field inside them, or
+an `AIJudge` on the object. Omit `field` to compare the whole response. A field
+the output omits scores that case 0. Fields with no check are not scored.
 
 This is preferable to holistic judging when it can express the contract: it is
 cheaper, easier to calibrate, and reveals exactly which output field regressed.
+The dashboard's **Check all fields** adds a default check for every Output
+field without one (Exact Match for enums, numbers, integers, booleans and lists
+of discrete values; AI Judge for text and other lists).
+
+`FieldLevelJudge` (`field_level_judge`, shown as Schema match) is deprecated.
+The SDK warns when one is constructed and rejects it before sending
+(`deprecated_evaluator_kind`), and the API rejects adding or changing one.
+Agents that already have one keep scoring and may remove it. Never recommend it
+or the `FieldScoring` helper for new work. To migrate, replace it with one
+targeted check per field it scored: `exact`/`array_exact` becomes `ExactMatch`,
+`embedding`/`array_similarity` becomes `SemanticSimilarity`, `contains` becomes
+`ContainsText`, and `judge`/`array_judge` becomes `AIJudge` with the field's
+judge instructions as `instructions`; carry the field weights over. The
+dashboard's **Convert to field checks** does the same, and an API rejection
+carries the converted list in `replacement.evaluators`. Settings on paths
+inside list items do not carry over.
 
 ### Code Function
 
@@ -202,8 +231,8 @@ both the label and a mandatory tool workflow matter. Calibrate the complete
 plan with a known-good and deliberately weak variant before relying on its
 leaderboard ranking.
 
-Classification and field-level evaluator weights control their contribution to
-the combined score. Verifier metrics instead define their own weight (up to 10)
+Classification, targeted check and code function weights control their
+contribution to the combined score. Verifier metrics instead define their own weight (up to 10)
 and optional normalized threshold directly on `VerifierMetric`; the SDK creates
 the platform binding internally.
 Verifier evaluators do not have an overall weight. Leave
@@ -222,37 +251,38 @@ Common typed configurations look like this:
 
 ```python
 from promptic_sdk import (
+    AIJudge,
     ClassificationF1,
-    FieldLevelJudge,
-    FieldScoring,
+    ContainsText,
+    ExactMatch,
     ExpectedBehaviorJudge,
+    SemanticSimilarity,
 )
 
 classification = ClassificationF1(field_paths=("currency",))
 
-structured = FieldLevelJudge(
-    fields={
-        "invoice_number": FieldScoring(method="exact", weight=2),
-        "summary": FieldScoring(
-            method="judge",
-            judge_instructions="Check factual equivalence, not writing style.",
-        ),
-        "line_items": FieldScoring(method="array_similarity"),
-    }
-)
+field_checks = [
+    ExactMatch("invoice_number", name="Invoice number", weight=2),
+    ExactMatch("vendor.vat_id", name="Vendor VAT ID"),
+    AIJudge(
+        "summary",
+        name="Summary",
+        instructions="Check factual equivalence, not writing style.",
+    ),
+    SemanticSimilarity("line_items", name="Line items"),
+    ContainsText("notes", name="Notes cite the PO number"),
+]
 
 behavior = ExpectedBehaviorJudge()
 ```
 
-`FieldScoring` has one comparison selector, `method`. Its scalar values are
-`exact`, `embedding`, `contains`, and `judge`; its array values are
-`array_exact`, `array_similarity`, and `array_judge`. The former `strategy` and
-`array_strategy` keywords are not accepted by the current SDK.
-
-Pass one or more of these objects in `evaluators=[...]`. For
-`FieldLevelJudge`, omitted Output-schema fields do not receive an explicit
-override; use `include=False` when a listed field is intentionally excluded.
-Use dotted field paths for nested fields.
+Pass these objects in `evaluators=[...]`, for example
+`evaluators=[classification, *field_checks, behavior]`. The first positional
+argument of a targeted check is `field`; omit it (or pass `None`) to score the
+whole response. Names must be unique across targeted checks and code
+functions. `name`, `description`, `weight`, `required`, `threshold`, `id`, and
+`enabled` work as on other evaluators. Targeted checks require `promptic-sdk`
+1.8.0 or later.
 
 Code functions take the source as a string; read it from a file you keep next
 to the benchmark definition:
@@ -284,7 +314,18 @@ def score(row):
     return {"score": 0.0, "reason": f"Line items sum to {total:.2f}"}
 ```
 
-In `agent.json`, a code function entry uses kind `code_function` with either
+In `agent.json`, targeted checks use kinds `exact_match`, `contains_text`,
+`semantic_similarity`, and `ai_judge` with an optional `field`; `ai_judge` also
+accepts `instructions` and `model`. As entries of the `evaluators` list:
+
+```json
+[
+  {"kind": "exact_match", "name": "Invoice number", "field": "invoice_number", "weight": 2},
+  {"kind": "ai_judge", "name": "Summary", "field": "summary", "instructions": "Check factual equivalence, not writing style."}
+]
+```
+
+A code function entry uses kind `code_function` with either
 inline `source` or a `sourceFile` path relative to the configuration file;
 `language` defaults to `python`, and `scaleMin`, `scaleMax`, `weight`,
 `required`, `id`, `description`, and `enabled` are optional (`threshold` is
