@@ -316,11 +316,13 @@ def score(row):
 
 In `agent.json`, targeted checks use kinds `exact_match`, `contains_text`,
 `semantic_similarity`, and `ai_judge` with an optional `field`; `ai_judge` also
-accepts `instructions` and `model`:
+accepts `instructions` and `model`. As entries of the `evaluators` list:
 
 ```json
-{"kind": "exact_match", "name": "Invoice number", "field": "invoice_number", "weight": 2}
-{"kind": "ai_judge", "name": "Summary", "field": "summary", "instructions": "Check factual equivalence, not writing style."}
+[
+  {"kind": "exact_match", "name": "Invoice number", "field": "invoice_number", "weight": 2},
+  {"kind": "ai_judge", "name": "Summary", "field": "summary", "instructions": "Check factual equivalence, not writing style."}
+]
 ```
 
 A code function entry uses kind `code_function` with either
