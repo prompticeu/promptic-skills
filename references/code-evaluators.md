@@ -79,7 +79,7 @@ function score(row) {
 Return a finite numeric raw score, or an object with a finite numeric `score`
 and an optional short string `reason`. Booleans, NaN, and Infinity are invalid.
 No result `metadata` is supported. Match `scaleMin`/`scaleMax` to raw scores;
-weight controls the contribution to the combined score.
+the two must differ. Weight controls the contribution to the combined score.
 
 | Row key | Meaning |
 | --- | --- |
